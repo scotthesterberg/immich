@@ -495,6 +495,7 @@ Class | Method | HTTP request | Description
  - [PersonCreateDto](doc//PersonCreateDto.md)
  - [PersonResponseDto](doc//PersonResponseDto.md)
  - [PersonStatisticsResponseDto](doc//PersonStatisticsResponseDto.md)
+ - [PersonType](doc//PersonType.md)
  - [PersonUpdateDto](doc//PersonUpdateDto.md)
  - [PersonWithFacesResponseDto](doc//PersonWithFacesResponseDto.md)
  - [PinCodeChangeDto](doc//PinCodeChangeDto.md)
