@@ -1,13 +1,13 @@
 from typing import Any
 
-import numpy as np
 import cv2
+import numpy as np
 from numpy.typing import NDArray
 from PIL import Image
 
 from immich_ml.models.base import InferenceModel
 from immich_ml.models.transforms import decode_cv2, normalize, serialize_np_array
-from immich_ml.schemas import PetDetectionOutput, PetRecognitionOutput, ModelTask, ModelType
+from immich_ml.schemas import ModelTask, ModelType, PetDetectionOutput, PetRecognitionOutput
 
 
 class PetRecognizer(InferenceModel):
@@ -15,6 +15,8 @@ class PetRecognizer(InferenceModel):
     identity = (ModelType.RECOGNITION, ModelTask.PET_RECOGNITION)
 
     def __init__(self, model_name: str, **model_kwargs: Any) -> None:
+        if model_name == "pet-recognition":
+            model_name = "MegaDescriptor-L-384"
         super().__init__(model_name, **model_kwargs)
 
     def _predict(
