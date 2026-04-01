@@ -29,12 +29,13 @@ import {
   JobStatus,
   Permission,
   PersonPathType,
+  PersonType,
   QueueName,
   SourceType,
   SystemMetadataKey,
   VectorIndex,
 } from 'src/enum';
-import { BoundingBox } from 'src/repositories/machine-learning.repository';
+import { BoundingBox, Face } from 'src/repositories/machine-learning.repository';
 import { UpdateFacesData } from 'src/repositories/person.repository';
 import { AssetFaceTable } from 'src/schema/tables/asset-face.table';
 import { FaceSearchTable } from 'src/schema/tables/face-search.table';
@@ -43,7 +44,7 @@ import { JobItem, JobOf } from 'src/types';
 import { getDimensions } from 'src/utils/asset.util';
 import { ImmichFileResponse } from 'src/utils/file';
 import { mimeTypes } from 'src/utils/mime-types';
-import { isFacialRecognitionEnabled } from 'src/utils/misc';
+import { isFacialRecognitionEnabled, isPetRecognitionEnabled } from 'src/utils/misc';
 import { Point, transformPoints } from 'src/utils/transform';
 
 @Injectable()
@@ -269,7 +270,7 @@ export class PersonService extends BaseService {
   @OnJob({ name: JobName.AssetDetectFacesQueueAll, queue: QueueName.FaceDetection })
   async handleQueueDetectFaces({ force }: JobOf<JobName.AssetDetectFacesQueueAll>): Promise<JobStatus> {
     const { machineLearning } = await this.getConfig({ withCache: false });
-    if (!isFacialRecognitionEnabled(machineLearning)) {
+    if (!isFacialRecognitionEnabled(machineLearning) && !isPetRecognitionEnabled(machineLearning)) {
       return JobStatus.Skipped;
     }
 
@@ -302,7 +303,10 @@ export class PersonService extends BaseService {
   @OnJob({ name: JobName.AssetDetectFaces, queue: QueueName.FaceDetection })
   async handleDetectFaces({ id }: JobOf<JobName.AssetDetectFaces>): Promise<JobStatus> {
     const { machineLearning } = await this.getConfig({ withCache: true });
-    if (!isFacialRecognitionEnabled(machineLearning)) {
+    const facialEnabled = isFacialRecognitionEnabled(machineLearning);
+    const petEnabled = isPetRecognitionEnabled(machineLearning);
+
+    if (!facialEnabled && !petEnabled) {
       return JobStatus.Skipped;
     }
 
@@ -316,11 +320,28 @@ export class PersonService extends BaseService {
       return JobStatus.Skipped;
     }
 
-    const { imageHeight, imageWidth, faces } = await this.machineLearningRepository.detectFaces(
-      previewFile.path,
-      machineLearning.facialRecognition,
-    );
-    this.logger.debug(`${faces.length} faces detected in ${previewFile.path}`);
+    let detectedFaces: Face[] = [];
+    let detectedPets: Face[] = [];
+    let imageHeight = 0;
+    let imageWidth = 0;
+
+    if (facialEnabled) {
+      const res = await this.machineLearningRepository.detectFaces(previewFile.path, machineLearning.facialRecognition);
+      detectedFaces = res.faces.map((face) => ({ ...face, type: PersonType.Human }));
+      imageHeight = res.imageHeight;
+      imageWidth = res.imageWidth;
+    }
+
+    if (petEnabled) {
+      const res = await this.machineLearningRepository.detectPets(previewFile.path, machineLearning.petRecognition);
+      // For now, we just call them "Dog" as a default pet type, or we could improve this later
+      detectedPets = res.pets.map((pet) => ({ ...pet, type: PersonType.Dog }));
+      imageHeight = res.imageHeight;
+      imageWidth = res.imageWidth;
+    }
+
+    const faces = [...detectedFaces, ...detectedPets];
+    this.logger.debug(`${faces.length} faces/pets detected in ${previewFile.path}`);
 
     const facesToAdd: (Insertable<AssetFaceTable> & { id: string })[] = [];
     const embeddings: FaceSearchTable[] = [];
@@ -334,7 +355,7 @@ export class PersonService extends BaseService {
 
     const heightScale = imageHeight / (asset.faces[0]?.imageHeight || 1);
     const widthScale = imageWidth / (asset.faces[0]?.imageWidth || 1);
-    for (const { boundingBox, embedding } of faces) {
+    for (const { boundingBox, embedding, type } of faces) {
       const scaledBox = {
         x1: boundingBox.x1 * widthScale,
         y1: boundingBox.y1 * heightScale,
@@ -356,6 +377,7 @@ export class PersonService extends BaseService {
           boundingBoxY1: boundingBox.y1,
           boundingBoxX2: boundingBox.x2,
           boundingBoxY2: boundingBox.y2,
+          type: type || PersonType.Human,
         });
         embeddings.push({ faceId, embedding });
       }
@@ -461,7 +483,10 @@ export class PersonService extends BaseService {
   @OnJob({ name: JobName.FacialRecognition, queue: QueueName.FacialRecognition })
   async handleRecognizeFaces({ id, deferred }: JobOf<JobName.FacialRecognition>): Promise<JobStatus> {
     const { machineLearning } = await this.getConfig({ withCache: true });
-    if (!isFacialRecognitionEnabled(machineLearning)) {
+    const facialEnabled = isFacialRecognitionEnabled(machineLearning);
+    const petEnabled = isPetRecognitionEnabled(machineLearning);
+
+    if (!facialEnabled && !petEnabled) {
       return JobStatus.Skipped;
     }
 
@@ -473,6 +498,17 @@ export class PersonService extends BaseService {
 
     if (face.sourceType !== SourceType.MachineLearning) {
       this.logger.warn(`Skipping face ${id} due to source ${face.sourceType}`);
+      return JobStatus.Skipped;
+    }
+
+    const type = face.type || PersonType.Human;
+    const config = type === PersonType.Human ? machineLearning.facialRecognition : machineLearning.petRecognition;
+
+    if (type === PersonType.Human && !facialEnabled) {
+      return JobStatus.Skipped;
+    }
+
+    if ((type === PersonType.Dog || type === PersonType.Cat) && !petEnabled) {
       return JobStatus.Skipped;
     }
 
@@ -489,22 +525,23 @@ export class PersonService extends BaseService {
     const matches = await this.searchRepository.searchFaces({
       userIds: [face.asset.ownerId],
       embedding: face.faceSearch.embedding,
-      maxDistance: machineLearning.facialRecognition.maxDistance,
-      numResults: machineLearning.facialRecognition.minFaces,
+      maxDistance: config.maxDistance,
+      numResults: config.minFaces,
       minBirthDate: new Date(face.asset.fileCreatedAt),
+      type,
     });
 
+    const minFaces = config.minFaces;
+
     // `matches` also includes the face itself
-    if (machineLearning.facialRecognition.minFaces > 1 && matches.length <= 1) {
+    if (minFaces > 1 && matches.length <= 1) {
       this.logger.debug(`Face ${id} only matched the face itself, skipping`);
       return JobStatus.Skipped;
     }
 
     this.logger.debug(`Face ${id} has ${matches.length} matches`);
 
-    const isCore =
-      matches.length >= machineLearning.facialRecognition.minFaces &&
-      face.asset.visibility === AssetVisibility.Timeline;
+    const isCore = matches.length >= minFaces && face.asset.visibility === AssetVisibility.Timeline;
     if (!isCore && !deferred) {
       this.logger.debug(`Deferring non-core face ${id} for later processing`);
       await this.jobRepository.queue({ name: JobName.FacialRecognition, data: { id, deferred: true } });
@@ -516,10 +553,11 @@ export class PersonService extends BaseService {
       const matchWithPerson = await this.searchRepository.searchFaces({
         userIds: [face.asset.ownerId],
         embedding: face.faceSearch.embedding,
-        maxDistance: machineLearning.facialRecognition.maxDistance,
+        maxDistance: config.maxDistance,
         numResults: 1,
         hasPerson: true,
         minBirthDate: new Date(face.asset.fileCreatedAt),
+        type,
       });
 
       if (matchWithPerson.length > 0) {
@@ -528,8 +566,12 @@ export class PersonService extends BaseService {
     }
 
     if (isCore && !personId) {
-      this.logger.log(`Creating new person for face ${id}`);
-      const newPerson = await this.personRepository.create({ ownerId: face.asset.ownerId, faceAssetId: face.id });
+      this.logger.log(`Creating new person for face ${id} of type ${type}`);
+      const newPerson = await this.personRepository.create({
+        ownerId: face.asset.ownerId,
+        faceAssetId: face.id,
+        type,
+      });
       await this.jobRepository.queue({ name: JobName.PersonGenerateThumbnail, data: { id: newPerson.id } });
       personId = newPerson.id;
     }

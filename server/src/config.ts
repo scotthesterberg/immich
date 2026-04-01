@@ -81,6 +81,13 @@ export type SystemConfig = {
       minRecognitionScore: number;
       maxResolution: number;
     };
+    petRecognition: {
+      enabled: boolean;
+      modelName: string;
+      minScore: number;
+      maxDistance: number;
+      minFaces: number;
+    };
   };
   map: {
     enabled: boolean;
@@ -271,6 +278,13 @@ export const defaults = Object.freeze<SystemConfig>({
       minDetectionScore: 0.5,
       minRecognitionScore: 0.8,
       maxResolution: 736,
+    },
+    petRecognition: {
+      enabled: false,
+      modelName: 'pet-recognition',
+      minScore: 0.5,
+      maxDistance: 0.6,
+      minFaces: 3,
     },
   },
   map: {

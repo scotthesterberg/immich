@@ -22,6 +22,7 @@ class BoundingBox(TypedDict):
 
 class ModelTask(StrEnum):
     FACIAL_RECOGNITION = "facial-recognition"
+    PET_RECOGNITION = "pet-recognition"
     SEARCH = "clip"
     OCR = "ocr"
 
@@ -42,6 +43,7 @@ class ModelFormat(StrEnum):
 class ModelSource(StrEnum):
     INSIGHTFACE = "insightface"
     MCLIP = "mclip"
+    MEGADESCRIPTOR = "megadescriptor"
     OPENCLIP = "openclip"
     PADDLE = "paddle"
 

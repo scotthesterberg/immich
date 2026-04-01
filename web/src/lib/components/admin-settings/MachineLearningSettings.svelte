@@ -255,6 +255,80 @@
       </SettingAccordion>
 
       <SettingAccordion
+        key="pet-recognition"
+        title={$t('admin.machine_learning_pet_recognition')}
+        subtitle={$t('admin.machine_learning_pet_recognition_description')}
+      >
+        <div class="ms-4 mt-4 flex flex-col gap-4">
+          <SettingSwitch
+            title={$t('admin.machine_learning_pet_recognition_setting')}
+            subtitle={$t('admin.machine_learning_pet_recognition_setting_description')}
+            bind:checked={configToEdit.machineLearning.petRecognition.enabled}
+            disabled={disabled || !configToEdit.machineLearning.enabled}
+          />
+
+          <hr />
+
+          <SettingSelect
+            label={$t('admin.machine_learning_pet_recognition_model')}
+            desc={$t('admin.machine_learning_pet_recognition_model_description')}
+            name="pet-recognition-model"
+            bind:value={configToEdit.machineLearning.petRecognition.modelName}
+            options={[{ value: 'pet-recognition', text: 'pet-recognition' }]}
+            disabled={disabled ||
+              !configToEdit.machineLearning.enabled ||
+              !configToEdit.machineLearning.petRecognition.enabled}
+            isEdited={configToEdit.machineLearning.petRecognition.modelName !==
+              config.machineLearning.petRecognition.modelName}
+          />
+
+          <SettingInputField
+            inputType={SettingInputFieldType.NUMBER}
+            label={$t('admin.machine_learning_min_detection_score')}
+            description={$t('admin.machine_learning_min_detection_score_description')}
+            bind:value={configToEdit.machineLearning.petRecognition.minScore}
+            step="0.01"
+            min={0.1}
+            max={1}
+            disabled={disabled ||
+              !configToEdit.machineLearning.enabled ||
+              !configToEdit.machineLearning.petRecognition.enabled}
+            isEdited={configToEdit.machineLearning.petRecognition.minScore !==
+              config.machineLearning.petRecognition.minScore}
+          />
+
+          <SettingInputField
+            inputType={SettingInputFieldType.NUMBER}
+            label={$t('admin.machine_learning_max_recognition_distance')}
+            description={$t('admin.machine_learning_max_recognition_distance_description')}
+            bind:value={configToEdit.machineLearning.petRecognition.maxDistance}
+            step="0.01"
+            min={0.1}
+            max={2}
+            disabled={disabled ||
+              !configToEdit.machineLearning.enabled ||
+              !configToEdit.machineLearning.petRecognition.enabled}
+            isEdited={configToEdit.machineLearning.petRecognition.maxDistance !==
+              config.machineLearning.petRecognition.maxDistance}
+          />
+
+          <SettingInputField
+            inputType={SettingInputFieldType.NUMBER}
+            label={$t('admin.machine_learning_min_recognized_pets')}
+            description={$t('admin.machine_learning_min_recognized_pets_description')}
+            bind:value={configToEdit.machineLearning.petRecognition.minFaces}
+            step="1"
+            min={1}
+            disabled={disabled ||
+              !configToEdit.machineLearning.enabled ||
+              !configToEdit.machineLearning.petRecognition.enabled}
+            isEdited={configToEdit.machineLearning.petRecognition.minFaces !==
+              config.machineLearning.petRecognition.minFaces}
+          />
+        </div>
+      </SettingAccordion>
+
+      <SettingAccordion
         key="ocr"
         title={$t('admin.machine_learning_ocr')}
         subtitle={$t('admin.machine_learning_ocr_description')}

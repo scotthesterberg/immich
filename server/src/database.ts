@@ -8,6 +8,7 @@ import {
   ChecksumAlgorithm,
   MemoryType,
   Permission,
+  PersonType,
   PluginContext,
   PluginTriggerType,
   SharedLinkType,
@@ -259,6 +260,7 @@ export type Person = {
   faceAssetId: string | null;
   isHidden: boolean;
   thumbnailPath: string;
+  type: PersonType;
 };
 
 export type AssetFace = {
@@ -277,6 +279,7 @@ export type AssetFace = {
   updatedAt: Date;
   updateId: string;
   isVisible: boolean;
+  type: PersonType;
 };
 
 export type Plugin = Selectable<PluginTable>;

@@ -20200,6 +20200,45 @@
         ],
         "type": "object"
       },
+      "PetRecognitionConfig": {
+        "properties": {
+          "enabled": {
+            "description": "Whether the task is enabled",
+            "type": "boolean"
+          },
+          "maxDistance": {
+            "description": "Maximum distance threshold for pet recognition",
+            "format": "double",
+            "maximum": 2,
+            "minimum": 0.1,
+            "type": "number"
+          },
+          "minFaces": {
+            "description": "Minimum number of pets required for recognition",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "minScore": {
+            "description": "Minimum confidence score for pet detection",
+            "format": "double",
+            "maximum": 1,
+            "minimum": 0.1,
+            "type": "number"
+          },
+          "modelName": {
+            "description": "Name of the model to use",
+            "type": "string"
+          }
+        },
+        "required": [
+          "enabled",
+          "maxDistance",
+          "minFaces",
+          "minScore",
+          "modelName"
+        ],
+        "type": "object"
+      },
       "PinCodeChangeDto": {
         "properties": {
           "newPinCode": {
@@ -24440,6 +24479,9 @@
           "ocr": {
             "$ref": "#/components/schemas/OcrConfig"
           },
+          "petRecognition": {
+            "$ref": "#/components/schemas/PetRecognitionConfig"
+          },
           "urls": {
             "format": "uri",
             "items": {
@@ -24457,6 +24499,7 @@
           "enabled",
           "facialRecognition",
           "ocr",
+          "petRecognition",
           "urls"
         ],
         "type": "object"

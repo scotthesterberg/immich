@@ -2562,6 +2562,18 @@ export type OcrConfig = {
     /** Name of the model to use */
     modelName: string;
 };
+export type PetRecognitionConfig = {
+    /** Whether the task is enabled */
+    enabled: boolean;
+    /** Maximum distance threshold for pet recognition */
+    maxDistance: number;
+    /** Minimum number of pets required for recognition */
+    minFaces: number;
+    /** Minimum confidence score for pet detection */
+    minScore: number;
+    /** Name of the model to use */
+    modelName: string;
+};
 export type SystemConfigMachineLearningDto = {
     availabilityChecks: MachineLearningAvailabilityChecksDto;
     clip: ClipConfig;
@@ -2570,6 +2582,7 @@ export type SystemConfigMachineLearningDto = {
     enabled: boolean;
     facialRecognition: FacialRecognitionConfig;
     ocr: OcrConfig;
+    petRecognition: PetRecognitionConfig;
     urls: string[];
 };
 export type SystemConfigMapDto = {
