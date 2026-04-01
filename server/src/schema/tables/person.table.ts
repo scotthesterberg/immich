@@ -11,6 +11,7 @@ import {
   UpdateDateColumn,
 } from '@immich/sql-tools';
 import { UpdatedAtTrigger, UpdateIdColumn } from 'src/decorators';
+import { PersonType } from 'src/enum';
 import { person_delete_audit } from 'src/schema/functions';
 import { AssetFaceTable } from 'src/schema/tables/asset-face.table';
 import { UserTable } from 'src/schema/tables/user.table';
@@ -57,6 +58,9 @@ export class PersonTable {
 
   @Column({ type: 'character varying', nullable: true, default: null })
   color!: string | null;
+
+  @Column({ type: 'enum', enum: 'person_type_enum', default: 'human' })
+  type!: Generated<PersonType>;
 
   @UpdateIdColumn({ index: true })
   updateId!: Generated<string>;

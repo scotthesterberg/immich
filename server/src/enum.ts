@@ -900,3 +900,9 @@ export enum PluginTriggerType {
   AssetCreate = 'AssetCreate',
   PersonRecognized = 'PersonRecognized',
 }
+
+export enum PersonType {
+  Human = 'human',
+  Dog = 'dog',
+  Cat = 'cat',
+}
