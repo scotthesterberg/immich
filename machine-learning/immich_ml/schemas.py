@@ -24,7 +24,6 @@ class ModelTask(StrEnum):
     FACIAL_RECOGNITION = "facial-recognition"
     SEARCH = "clip"
     OCR = "ocr"
-    PET_DETECTION = "pet-detection"
     PET_RECOGNITION = "pet-recognition"
 
 
@@ -48,6 +47,7 @@ class ModelSource(StrEnum):
     PADDLE = "paddle"
     YOLOV8 = "yolov8"
     MEGADESCRIPTOR = "megadescriptor"
+    PET_RECOGNITION_BUNDLE = "pet-recognition-bundle"
 
 
 class ModelPrecision(StrEnum):
