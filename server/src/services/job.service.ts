@@ -144,6 +144,7 @@ export class JobService extends BaseService {
         const jobs: JobItem[] = [
           { name: JobName.SmartSearch, data: item.data },
           { name: JobName.AssetDetectFaces, data: item.data },
+          { name: JobName.PetDetection, data: item.data },
           { name: JobName.Ocr, data: item.data },
         ];
 

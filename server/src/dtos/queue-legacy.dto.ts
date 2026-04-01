@@ -51,6 +51,12 @@ export class QueuesResponseLegacyDto implements Record<QueueName, QueueResponseL
   [QueueName.FaceDetection]!: QueueResponseLegacyDto;
 
   @ApiProperty({ type: QueueResponseLegacyDto })
+  [QueueName.PetDetection]!: QueueResponseLegacyDto;
+
+  @ApiProperty({ type: QueueResponseLegacyDto })
+  [QueueName.PetRecognition]!: QueueResponseLegacyDto;
+
+  @ApiProperty({ type: QueueResponseLegacyDto })
   [QueueName.FacialRecognition]!: QueueResponseLegacyDto;
 
   @ApiProperty({ type: QueueResponseLegacyDto })

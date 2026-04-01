@@ -59,7 +59,13 @@ export type SystemConfig = {
       timeout: number;
       interval: number;
     };
-    recognizePets: boolean;
+    petRecognition: {
+      enabled: boolean;
+      modelName: string;
+      minScore: number;
+      minFaces: number;
+      maxDistance: number;
+    };
     clip: {
       enabled: boolean;
       modelName: string;
@@ -228,6 +234,8 @@ export const defaults = Object.freeze<SystemConfig>({
     [QueueName.SmartSearch]: { concurrency: 2 },
     [QueueName.MetadataExtraction]: { concurrency: 5 },
     [QueueName.FaceDetection]: { concurrency: 2 },
+    [QueueName.PetDetection]: { concurrency: 2 },
+    [QueueName.PetRecognition]: { concurrency: 2 },
     [QueueName.Search]: { concurrency: 5 },
     [QueueName.Sidecar]: { concurrency: 5 },
     [QueueName.Library]: { concurrency: 5 },
@@ -251,7 +259,13 @@ export const defaults = Object.freeze<SystemConfig>({
       timeout: Number(process.env.IMMICH_MACHINE_LEARNING_PING_TIMEOUT) || 2000,
       interval: 30_000,
     },
-    recognizePets: false,
+    petRecognition: {
+      enabled: false,
+      modelName: 'pet-recognition',
+      minScore: 0.5,
+      maxDistance: 0.5,
+      minFaces: 3,
+    },
     clip: {
       enabled: true,
       modelName: 'ViT-B-32__openai',

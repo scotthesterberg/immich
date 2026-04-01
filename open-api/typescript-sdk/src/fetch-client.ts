@@ -1286,6 +1286,8 @@ export type QueuesResponseLegacyDto = {
     migration: QueueResponseLegacyDto;
     notifications: QueueResponseLegacyDto;
     ocr: QueueResponseLegacyDto;
+    "pet-detection": QueueResponseLegacyDto;
+    "pet-recognition": QueueResponseLegacyDto;
     search: QueueResponseLegacyDto;
     sidecar: QueueResponseLegacyDto;
     smartSearch: QueueResponseLegacyDto;
@@ -2123,6 +2125,8 @@ export type ServerFeaturesDto = {
     ocr: boolean;
     /** Whether password login is enabled */
     passwordLogin: boolean;
+    /** Whether pet recognition is enabled */
+    petRecognition: boolean;
     /** Whether reverse geocoding is enabled */
     reverseGeocoding: boolean;
     /** Whether search is enabled */
@@ -2509,6 +2513,8 @@ export type SystemConfigJobDto = {
     migration: JobSettingsDto;
     notifications: JobSettingsDto;
     ocr: JobSettingsDto;
+    "pet-detection": JobSettingsDto;
+    "pet-recognition": JobSettingsDto;
     search: JobSettingsDto;
     sidecar: JobSettingsDto;
     smartSearch: JobSettingsDto;
@@ -2576,6 +2582,18 @@ export type OcrConfig = {
     /** Name of the model to use */
     modelName: string;
 };
+export type PetRecognitionConfig = {
+    /** Whether the task is enabled */
+    enabled: boolean;
+    /** Maximum distance threshold for pet recognition */
+    maxDistance: number;
+    /** Minimum number of faces required for recognition */
+    minFaces: number;
+    /** Minimum confidence score for pet detection */
+    minScore: number;
+    /** Name of the model to use */
+    modelName: string;
+};
 export type SystemConfigMachineLearningDto = {
     availabilityChecks: MachineLearningAvailabilityChecksDto;
     clip: ClipConfig;
@@ -2584,8 +2602,7 @@ export type SystemConfigMachineLearningDto = {
     enabled: boolean;
     facialRecognition: FacialRecognitionConfig;
     ocr: OcrConfig;
-    /** Recognize pets */
-    recognizePets: boolean;
+    petRecognition: PetRecognitionConfig;
     urls: string[];
 };
 export type SystemConfigMapDto = {
@@ -7131,6 +7148,7 @@ export enum Reason {
 }
 export enum AssetJobName {
     RefreshFaces = "refresh-faces",
+    RefreshPets = "refresh-pets",
     RefreshMetadata = "refresh-metadata",
     RegenerateThumbnail = "regenerate-thumbnail",
     TranscodeVideo = "transcode-video"
@@ -7175,6 +7193,8 @@ export enum QueueName {
     Notifications = "notifications",
     BackupDatabase = "backupDatabase",
     Ocr = "ocr",
+    PetDetection = "pet-detection",
+    PetRecognition = "pet-recognition",
     Workflow = "workflow",
     Editor = "editor"
 }
@@ -7257,6 +7277,10 @@ export enum JobName {
     PersonCleanup = "PersonCleanup",
     PersonFileMigration = "PersonFileMigration",
     PersonGenerateThumbnail = "PersonGenerateThumbnail",
+    PetDetectionQueueAll = "PetDetectionQueueAll",
+    PetDetection = "PetDetection",
+    PetRecognitionQueueAll = "PetRecognitionQueueAll",
+    PetRecognition = "PetRecognition",
     SessionCleanup = "SessionCleanup",
     SendMail = "SendMail",
     SidecarQueueAll = "SidecarQueueAll",

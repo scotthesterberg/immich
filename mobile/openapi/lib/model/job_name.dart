@@ -65,6 +65,10 @@ class JobName {
   static const personCleanup = JobName._(r'PersonCleanup');
   static const personFileMigration = JobName._(r'PersonFileMigration');
   static const personGenerateThumbnail = JobName._(r'PersonGenerateThumbnail');
+  static const petDetectionQueueAll = JobName._(r'PetDetectionQueueAll');
+  static const petDetection = JobName._(r'PetDetection');
+  static const petRecognitionQueueAll = JobName._(r'PetRecognitionQueueAll');
+  static const petRecognition = JobName._(r'PetRecognition');
   static const sessionCleanup = JobName._(r'SessionCleanup');
   static const sendMail = JobName._(r'SendMail');
   static const sidecarQueueAll = JobName._(r'SidecarQueueAll');
@@ -124,6 +128,10 @@ class JobName {
     personCleanup,
     personFileMigration,
     personGenerateThumbnail,
+    petDetectionQueueAll,
+    petDetection,
+    petRecognitionQueueAll,
+    petRecognition,
     sessionCleanup,
     sendMail,
     sidecarQueueAll,
@@ -218,6 +226,10 @@ class JobNameTypeTransformer {
         case r'PersonCleanup': return JobName.personCleanup;
         case r'PersonFileMigration': return JobName.personFileMigration;
         case r'PersonGenerateThumbnail': return JobName.personGenerateThumbnail;
+        case r'PetDetectionQueueAll': return JobName.petDetectionQueueAll;
+        case r'PetDetection': return JobName.petDetection;
+        case r'PetRecognitionQueueAll': return JobName.petRecognitionQueueAll;
+        case r'PetRecognition': return JobName.petRecognition;
         case r'SessionCleanup': return JobName.sessionCleanup;
         case r'SendMail': return JobName.sendMail;
         case r'SidecarQueueAll': return JobName.sidecarQueueAll;

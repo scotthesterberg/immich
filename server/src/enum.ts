@@ -578,6 +578,8 @@ export enum QueueName {
   Notification = 'notifications',
   BackupDatabase = 'backupDatabase',
   Ocr = 'ocr',
+  PetDetection = 'pet-detection',
+  PetRecognition = 'pet-recognition',
   Workflow = 'workflow',
   Editor = 'editor',
 }
@@ -644,6 +646,11 @@ export enum JobName {
   PersonCleanup = 'PersonCleanup',
   PersonFileMigration = 'PersonFileMigration',
   PersonGenerateThumbnail = 'PersonGenerateThumbnail',
+
+  PetDetectionQueueAll = 'PetDetectionQueueAll',
+  PetDetection = 'PetDetection',
+  PetRecognitionQueueAll = 'PetRecognitionQueueAll',
+  PetRecognition = 'PetRecognition',
 
   SessionCleanup = 'SessionCleanup',
 

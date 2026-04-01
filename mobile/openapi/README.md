@@ -498,6 +498,7 @@ Class | Method | HTTP request | Description
  - [PersonType](doc//PersonType.md)
  - [PersonUpdateDto](doc//PersonUpdateDto.md)
  - [PersonWithFacesResponseDto](doc//PersonWithFacesResponseDto.md)
+ - [PetRecognitionConfig](doc//PetRecognitionConfig.md)
  - [PinCodeChangeDto](doc//PinCodeChangeDto.md)
  - [PinCodeResetDto](doc//PinCodeResetDto.md)
  - [PinCodeSetupDto](doc//PinCodeSetupDto.md)

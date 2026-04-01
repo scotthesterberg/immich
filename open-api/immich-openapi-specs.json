@@ -16582,6 +16582,7 @@
         "description": "Job name",
         "enum": [
           "refresh-faces",
+          "refresh-pets",
           "refresh-metadata",
           "regenerate-thumbnail",
           "transcode-video"
@@ -18315,6 +18316,10 @@
           "PersonCleanup",
           "PersonFileMigration",
           "PersonGenerateThumbnail",
+          "PetDetectionQueueAll",
+          "PetDetection",
+          "PetRecognitionQueueAll",
+          "PetRecognition",
           "SessionCleanup",
           "SendMail",
           "SidecarQueueAll",
@@ -20266,6 +20271,45 @@
         ],
         "type": "object"
       },
+      "PetRecognitionConfig": {
+        "properties": {
+          "enabled": {
+            "description": "Whether the task is enabled",
+            "type": "boolean"
+          },
+          "maxDistance": {
+            "description": "Maximum distance threshold for pet recognition",
+            "format": "double",
+            "maximum": 2,
+            "minimum": 0.1,
+            "type": "number"
+          },
+          "minFaces": {
+            "description": "Minimum number of faces required for recognition",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "minScore": {
+            "description": "Minimum confidence score for pet detection",
+            "format": "double",
+            "maximum": 1,
+            "minimum": 0.1,
+            "type": "number"
+          },
+          "modelName": {
+            "description": "Name of the model to use",
+            "type": "string"
+          }
+        },
+        "required": [
+          "enabled",
+          "maxDistance",
+          "minFaces",
+          "minScore",
+          "modelName"
+        ],
+        "type": "object"
+      },
       "PinCodeChangeDto": {
         "properties": {
           "newPinCode": {
@@ -20682,6 +20726,8 @@
           "notifications",
           "backupDatabase",
           "ocr",
+          "pet-detection",
+          "pet-recognition",
           "workflow",
           "editor"
         ],
@@ -20825,6 +20871,12 @@
           "ocr": {
             "$ref": "#/components/schemas/QueueResponseLegacyDto"
           },
+          "pet-detection": {
+            "$ref": "#/components/schemas/QueueResponseLegacyDto"
+          },
+          "pet-recognition": {
+            "$ref": "#/components/schemas/QueueResponseLegacyDto"
+          },
           "search": {
             "$ref": "#/components/schemas/QueueResponseLegacyDto"
           },
@@ -20859,6 +20911,8 @@
           "migration",
           "notifications",
           "ocr",
+          "pet-detection",
+          "pet-recognition",
           "search",
           "sidecar",
           "smartSearch",
@@ -21533,6 +21587,10 @@
             "description": "Whether password login is enabled",
             "type": "boolean"
           },
+          "petRecognition": {
+            "description": "Whether pet recognition is enabled",
+            "type": "boolean"
+          },
           "reverseGeocoding": {
             "description": "Whether reverse geocoding is enabled",
             "type": "boolean"
@@ -21565,6 +21623,7 @@
           "oauthAutoLaunch",
           "ocr",
           "passwordLogin",
+          "petRecognition",
           "reverseGeocoding",
           "search",
           "sidecar",
@@ -24412,6 +24471,12 @@
           "ocr": {
             "$ref": "#/components/schemas/JobSettingsDto"
           },
+          "pet-detection": {
+            "$ref": "#/components/schemas/JobSettingsDto"
+          },
+          "pet-recognition": {
+            "$ref": "#/components/schemas/JobSettingsDto"
+          },
           "search": {
             "$ref": "#/components/schemas/JobSettingsDto"
           },
@@ -24440,6 +24505,8 @@
           "migration",
           "notifications",
           "ocr",
+          "pet-detection",
+          "pet-recognition",
           "search",
           "sidecar",
           "smartSearch",
@@ -24533,9 +24600,8 @@
           "ocr": {
             "$ref": "#/components/schemas/OcrConfig"
           },
-          "recognizePets": {
-            "description": "Recognize pets",
-            "type": "boolean"
+          "petRecognition": {
+            "$ref": "#/components/schemas/PetRecognitionConfig"
           },
           "urls": {
             "format": "uri",
@@ -24554,7 +24620,7 @@
           "enabled",
           "facialRecognition",
           "ocr",
-          "recognizePets",
+          "petRecognition",
           "urls"
         ],
         "type": "object"

@@ -21,6 +21,8 @@ class SystemConfigJobDto {
     required this.migration,
     required this.notifications,
     required this.ocr,
+    required this.petDetection,
+    required this.petRecognition,
     required this.search,
     required this.sidecar,
     required this.smartSearch,
@@ -45,6 +47,10 @@ class SystemConfigJobDto {
 
   JobSettingsDto ocr;
 
+  JobSettingsDto petDetection;
+
+  JobSettingsDto petRecognition;
+
   JobSettingsDto search;
 
   JobSettingsDto sidecar;
@@ -67,6 +73,8 @@ class SystemConfigJobDto {
     other.migration == migration &&
     other.notifications == notifications &&
     other.ocr == ocr &&
+    other.petDetection == petDetection &&
+    other.petRecognition == petRecognition &&
     other.search == search &&
     other.sidecar == sidecar &&
     other.smartSearch == smartSearch &&
@@ -85,6 +93,8 @@ class SystemConfigJobDto {
     (migration.hashCode) +
     (notifications.hashCode) +
     (ocr.hashCode) +
+    (petDetection.hashCode) +
+    (petRecognition.hashCode) +
     (search.hashCode) +
     (sidecar.hashCode) +
     (smartSearch.hashCode) +
@@ -93,7 +103,7 @@ class SystemConfigJobDto {
     (workflow.hashCode);
 
   @override
-  String toString() => 'SystemConfigJobDto[backgroundTask=$backgroundTask, editor=$editor, faceDetection=$faceDetection, library_=$library_, metadataExtraction=$metadataExtraction, migration=$migration, notifications=$notifications, ocr=$ocr, search=$search, sidecar=$sidecar, smartSearch=$smartSearch, thumbnailGeneration=$thumbnailGeneration, videoConversion=$videoConversion, workflow=$workflow]';
+  String toString() => 'SystemConfigJobDto[backgroundTask=$backgroundTask, editor=$editor, faceDetection=$faceDetection, library_=$library_, metadataExtraction=$metadataExtraction, migration=$migration, notifications=$notifications, ocr=$ocr, petDetection=$petDetection, petRecognition=$petRecognition, search=$search, sidecar=$sidecar, smartSearch=$smartSearch, thumbnailGeneration=$thumbnailGeneration, videoConversion=$videoConversion, workflow=$workflow]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -105,6 +115,8 @@ class SystemConfigJobDto {
       json[r'migration'] = this.migration;
       json[r'notifications'] = this.notifications;
       json[r'ocr'] = this.ocr;
+      json[r'pet-detection'] = this.petDetection;
+      json[r'pet-recognition'] = this.petRecognition;
       json[r'search'] = this.search;
       json[r'sidecar'] = this.sidecar;
       json[r'smartSearch'] = this.smartSearch;
@@ -131,6 +143,8 @@ class SystemConfigJobDto {
         migration: JobSettingsDto.fromJson(json[r'migration'])!,
         notifications: JobSettingsDto.fromJson(json[r'notifications'])!,
         ocr: JobSettingsDto.fromJson(json[r'ocr'])!,
+        petDetection: JobSettingsDto.fromJson(json[r'pet-detection'])!,
+        petRecognition: JobSettingsDto.fromJson(json[r'pet-recognition'])!,
         search: JobSettingsDto.fromJson(json[r'search'])!,
         sidecar: JobSettingsDto.fromJson(json[r'sidecar'])!,
         smartSearch: JobSettingsDto.fromJson(json[r'smartSearch'])!,
@@ -192,6 +206,8 @@ class SystemConfigJobDto {
     'migration',
     'notifications',
     'ocr',
+    'pet-detection',
+    'pet-recognition',
     'search',
     'sidecar',
     'smartSearch',

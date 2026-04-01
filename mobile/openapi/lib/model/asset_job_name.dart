@@ -24,6 +24,7 @@ class AssetJobName {
   String toJson() => value;
 
   static const refreshFaces = AssetJobName._(r'refresh-faces');
+  static const refreshPets = AssetJobName._(r'refresh-pets');
   static const refreshMetadata = AssetJobName._(r'refresh-metadata');
   static const regenerateThumbnail = AssetJobName._(r'regenerate-thumbnail');
   static const transcodeVideo = AssetJobName._(r'transcode-video');
@@ -31,6 +32,7 @@ class AssetJobName {
   /// List of all possible values in this [enum][AssetJobName].
   static const values = <AssetJobName>[
     refreshFaces,
+    refreshPets,
     refreshMetadata,
     regenerateThumbnail,
     transcodeVideo,
@@ -73,6 +75,7 @@ class AssetJobNameTypeTransformer {
     if (data != null) {
       switch (data) {
         case r'refresh-faces': return AssetJobName.refreshFaces;
+        case r'refresh-pets': return AssetJobName.refreshPets;
         case r'refresh-metadata': return AssetJobName.refreshMetadata;
         case r'regenerate-thumbnail': return AssetJobName.regenerateThumbnail;
         case r'transcode-video': return AssetJobName.transcodeVideo;
