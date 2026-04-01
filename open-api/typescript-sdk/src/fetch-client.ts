@@ -2113,6 +2113,8 @@ export type ServerFeaturesDto = {
     email: boolean;
     /** Whether facial recognition is enabled */
     facialRecognition: boolean;
+    /** Whether pet recognition is enabled */
+    petRecognition: boolean;
     /** Whether face import is enabled */
     importFaces: boolean;
     /** Whether map feature is enabled */
