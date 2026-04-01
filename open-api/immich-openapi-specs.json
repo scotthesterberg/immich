@@ -18277,6 +18277,8 @@
           "AssetDeleteCheck",
           "AssetDetectFacesQueueAll",
           "AssetDetectFaces",
+          "AssetDetectPetsQueueAll",
+          "AssetDetectPets",
           "AssetDetectDuplicatesQueueAll",
           "AssetDetectDuplicates",
           "AssetEditThumbnailGeneration",
@@ -18293,6 +18295,8 @@
           "DatabaseBackup",
           "FacialRecognitionQueueAll",
           "FacialRecognition",
+          "PetRecognitionQueueAll",
+          "PetRecognition",
           "FileDelete",
           "FileMigrationQueueAll",
           "LibraryDeleteCheck",
@@ -20709,7 +20713,9 @@
           "metadataExtraction",
           "videoConversion",
           "faceDetection",
+          "petDetection",
           "facialRecognition",
+          "petRecognition",
           "smartSearch",
           "duplicateDetection",
           "backgroundTask",
@@ -20864,6 +20870,12 @@
           "ocr": {
             "$ref": "#/components/schemas/QueueResponseLegacyDto"
           },
+          "petDetection": {
+            "$ref": "#/components/schemas/QueueResponseLegacyDto"
+          },
+          "petRecognition": {
+            "$ref": "#/components/schemas/QueueResponseLegacyDto"
+          },
           "search": {
             "$ref": "#/components/schemas/QueueResponseLegacyDto"
           },
@@ -20898,6 +20910,8 @@
           "migration",
           "notifications",
           "ocr",
+          "petDetection",
+          "petRecognition",
           "search",
           "sidecar",
           "smartSearch",
@@ -24451,6 +24465,9 @@
           "ocr": {
             "$ref": "#/components/schemas/JobSettingsDto"
           },
+          "petDetection": {
+            "$ref": "#/components/schemas/JobSettingsDto"
+          },
           "search": {
             "$ref": "#/components/schemas/JobSettingsDto"
           },
@@ -24479,6 +24496,7 @@
           "migration",
           "notifications",
           "ocr",
+          "petDetection",
           "search",
           "sidecar",
           "smartSearch",
