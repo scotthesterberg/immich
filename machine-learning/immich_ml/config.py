@@ -31,6 +31,11 @@ class OcrSettings(BaseModel):
     detection: str | None = None
 
 
+class PetRecognitionSettings(BaseModel):
+    recognition: str | None = None
+    detection: str | None = None
+
+
 class PreloadModelData(BaseModel):
     clip_fallback: str | None = os.getenv("MACHINE_LEARNING_PRELOAD__CLIP", None)
     facial_recognition_fallback: str | None = os.getenv("MACHINE_LEARNING_PRELOAD__FACIAL_RECOGNITION", None)
@@ -45,6 +50,7 @@ class PreloadModelData(BaseModel):
     clip: ClipSettings = ClipSettings()
     facial_recognition: FacialRecognitionSettings = FacialRecognitionSettings()
     ocr: OcrSettings = OcrSettings()
+    pet_recognition: PetRecognitionSettings = PetRecognitionSettings()
 
 
 class MaxBatchSize(BaseModel):
@@ -61,6 +67,7 @@ class Settings(BaseSettings):
         case_sensitive=False,
         env_nested_delimiter="__",
         protected_namespaces=("settings_",),
+        secrets_dir="/run/secrets",
     )
 
     cache_folder: Path = (Path.home() / ".cache" / "immich_ml").resolve()
@@ -83,6 +90,7 @@ class Settings(BaseSettings):
     max_batch_size: MaxBatchSize | None = None
     openvino_precision: ModelPrecision = ModelPrecision.FP32
     rocm_precision: ModelPrecision = ModelPrecision.FP32
+    hf_token: str | None = None
 
     @property
     def device_id(self) -> str:
@@ -90,7 +98,7 @@ class Settings(BaseSettings):
 
 
 class NonPrefixedSettings(BaseSettings):
-    model_config = SettingsConfigDict(case_sensitive=False)
+    model_config = SettingsConfigDict(case_sensitive=False, secrets_dir="/run/secrets")
 
     immich_host: str = "[::]"
     immich_port: int = 3003
@@ -98,11 +106,8 @@ class NonPrefixedSettings(BaseSettings):
     no_color: bool = False
 
 
-_clean_name = str.maketrans(":\\/", "___", ".")
-
-
 def clean_name(model_name: str) -> str:
-    return model_name.split("/")[-1].translate(_clean_name)
+    return model_name.split("/")[-1]
 
 
 LOG_LEVELS: dict[str, int] = {
@@ -147,8 +152,11 @@ class CustomRichHandler(RichHandler):
         return super().emit(record)
 
 
-log = logging.getLogger("ml.log")
+log = logging.getLogger()
 log.setLevel(LOG_LEVEL)
+for handler in log.handlers[:]:
+    log.removeHandler(handler)
+log.addHandler(CustomRichHandler())
 
 
 # patches this issue https://github.com/encode/uvicorn/discussions/1803

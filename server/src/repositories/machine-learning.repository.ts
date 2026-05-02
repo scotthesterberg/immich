@@ -3,6 +3,7 @@ import { Duration } from 'luxon';
 import { readFile } from 'node:fs/promises';
 import { MachineLearningConfig } from 'src/config';
 import { CLIPConfig } from 'src/dtos/model-config.dto';
+import { ConfigRepository } from 'src/repositories/config.repository';
 import { LoggingRepository } from 'src/repositories/logging.repository';
 
 export interface BoundingBox {
@@ -14,6 +15,7 @@ export interface BoundingBox {
 
 export enum ModelTask {
   FACIAL_RECOGNITION = 'facial-recognition',
+  PET_RECOGNITION = 'pet-recognition',
   SEARCH = 'clip',
   OCR = 'ocr',
 }
@@ -32,6 +34,11 @@ export type ModelPayload = { imagePath: string } | { text: string };
 type ModelOptions = { modelName: string };
 
 export type FaceDetectionOptions = ModelOptions & { minScore: number };
+export type PetDetectionOptions = {
+  detectionModelName: string;
+  recognitionModelName: string;
+  minScore: number;
+};
 export type OcrOptions = ModelOptions & {
   minDetectionScore: number;
   minRecognitionScore: number;
@@ -66,6 +73,13 @@ export type FacialRecognitionRequest = {
   };
 };
 
+export type PetRecognitionRequest = {
+  [ModelTask.PET_RECOGNITION]: {
+    [ModelType.DETECTION]: ModelOptions & { options: { minScore: number } };
+    [ModelType.RECOGNITION]: ModelOptions;
+  };
+};
+
 export interface Face {
   boundingBox: BoundingBox;
   embedding: string;
@@ -73,8 +87,14 @@ export interface Face {
 }
 
 export type FacialRecognitionResponse = { [ModelTask.FACIAL_RECOGNITION]: Face[] } & VisualResponse;
+export type PetRecognitionResponse = { [ModelTask.PET_RECOGNITION]: Face[] } & VisualResponse;
 export type DetectedFaces = { faces: Face[] } & VisualResponse;
-export type MachineLearningRequest = ClipVisualRequest | ClipTextualRequest | FacialRecognitionRequest | OcrRequest;
+export type MachineLearningRequest =
+  | ClipVisualRequest
+  | ClipTextualRequest
+  | FacialRecognitionRequest
+  | PetRecognitionRequest
+  | OcrRequest;
 export type TextEncodingOptions = ModelOptions & { language?: string };
 
 @Injectable()
@@ -91,7 +111,10 @@ export class MachineLearningRepository {
     return this._config;
   }
 
-  constructor(private logger: LoggingRepository) {
+  constructor(
+    private logger: LoggingRepository,
+    private configRepository: ConfigRepository,
+  ) {
     this.logger.setContext(MachineLearningRepository.name);
   }
 
@@ -206,6 +229,21 @@ export class MachineLearningRepository {
     };
   }
 
+  async detectPets(imagePath: string, { detectionModelName, recognitionModelName, minScore }: PetDetectionOptions) {
+    const request = {
+      [ModelTask.PET_RECOGNITION]: {
+        [ModelType.DETECTION]: { modelName: detectionModelName, options: { minScore } },
+        [ModelType.RECOGNITION]: { modelName: recognitionModelName },
+      },
+    };
+    const response = await this.predict<PetRecognitionResponse>({ imagePath }, request);
+    return {
+      imageHeight: response.imageHeight,
+      imageWidth: response.imageWidth,
+      faces: response[ModelTask.PET_RECOGNITION],
+    };
+  }
+
   async encodeImage(imagePath: string, { modelName }: CLIPConfig) {
     const request = { [ModelTask.SEARCH]: { [ModelType.VISUAL]: { modelName } } };
     const response = await this.predict<ClipVisualResponse>({ imagePath }, request);
@@ -232,6 +270,11 @@ export class MachineLearningRepository {
   private async getFormData(payload: ModelPayload, config: MachineLearningRequest): Promise<FormData> {
     const formData = new FormData();
     formData.append('entries', JSON.stringify(config));
+
+    const hfToken = this.configRepository.getEnv().hfToken;
+    if (hfToken) {
+      formData.append('hfToken', hfToken);
+    }
 
     if ('imagePath' in payload) {
       const fileBuffer = await readFile(payload.imagePath);

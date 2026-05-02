@@ -8,6 +8,7 @@ import {
   ChecksumAlgorithm,
   MemoryType,
   Permission,
+  PersonType,
   PluginContext,
   PluginTriggerType,
   SharedLinkType,
@@ -17,8 +18,10 @@ import {
 } from 'src/enum';
 import { AlbumTable } from 'src/schema/tables/album.table';
 import { AssetExifTable } from 'src/schema/tables/asset-exif.table';
+import { AssetFaceTable } from 'src/schema/tables/asset-face.table';
 import { AssetTable } from 'src/schema/tables/asset.table';
-import { PluginActionTable, PluginFilterTable } from 'src/schema/tables/plugin.table';
+import { PersonTable } from 'src/schema/tables/person.table';
+import { PluginActionTable, PluginFilterTable, PluginTable } from 'src/schema/tables/plugin.table';
 import { WorkflowActionTable, WorkflowFilterTable, WorkflowTable } from 'src/schema/tables/workflow.table';
 import { UserMetadataItem } from 'src/types';
 import type { ActionConfig, FilterConfig, JSONSchema } from 'src/types/plugin-schema.types';
@@ -114,6 +117,8 @@ export type Asset = {
   id: string;
   checksum: Buffer<ArrayBufferLike>;
   checksumAlgorithm: ChecksumAlgorithm;
+  deviceAssetId: string;
+  deviceId: string;
   fileCreatedAt: Date;
   fileModifiedAt: Date;
   isExternal: boolean;
@@ -195,6 +200,7 @@ export type SharedLink = {
 };
 
 export type Album = Selectable<AlbumTable> & {
+  owner: ShallowDehydrateObject<User>;
   assets: ShallowDehydrateObject<Selectable<AssetTable>>[];
 };
 
@@ -256,6 +262,7 @@ export type Person = {
   faceAssetId: string | null;
   isHidden: boolean;
   thumbnailPath: string;
+  type: PersonType;
 };
 
 export type AssetFace = {
@@ -274,7 +281,10 @@ export type AssetFace = {
   updatedAt: Date;
   updateId: string;
   isVisible: boolean;
+  personType: PersonType | null;
 };
+
+export type Plugin = Selectable<PluginTable>;
 
 export type PluginFilter = Selectable<PluginFilterTable> & {
   methodName: string;
@@ -328,6 +338,8 @@ export const columns = {
     'asset.id',
     'asset.checksum',
     'asset.checksumAlgorithm',
+    'asset.deviceAssetId',
+    'asset.deviceId',
     'asset.fileCreatedAt',
     'asset.fileModifiedAt',
     'asset.isExternal',

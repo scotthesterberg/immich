@@ -2,6 +2,8 @@ import { DatabaseConnectionParams } from '@immich/sql-tools';
 import { RegisterQueueOptions } from '@nestjs/bullmq';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { QueueOptions } from 'bullmq';
+import { plainToInstance } from 'class-transformer';
+import { validateSync } from 'class-validator';
 import { Request, Response } from 'express';
 import { HelmetOptions } from 'helmet';
 import { RedisOptions } from 'ioredis';
@@ -11,7 +13,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { citiesFile, excludePaths, IWorker } from 'src/constants';
 import { Telemetry } from 'src/decorators';
-import { EnvSchema } from 'src/dtos/env.dto';
+import { EnvDto } from 'src/dtos/env.dto';
 import {
   DatabaseExtension,
   ImmichEnvironment,
@@ -73,10 +75,6 @@ export interface EnvData {
     server: string;
   };
 
-  versionCheck: {
-    url: string;
-  };
-
   network: {
     trustedProxies: string[];
   };
@@ -127,6 +125,7 @@ export interface EnvData {
 
   noColor: boolean;
   nodeVersion?: string;
+  hfToken?: string;
 }
 
 const productionKeys = {
@@ -171,16 +170,15 @@ const resolveHelmetFile = (helmetFile: 'true' | 'false' | string | undefined) =>
 };
 
 const getEnv = (): EnvData => {
-  const parseResult = EnvSchema.safeParse(process.env);
-  if (!parseResult.success) {
-    const messages = ['Invalid environment variables: '];
-    for (const issue of parseResult.error.issues) {
-      const path = issue.path.join('.');
-      messages.push(`  - [${path}] ${issue.message}`);
+  const dto = plainToInstance(EnvDto, process.env);
+  const errors = validateSync(dto);
+  if (errors.length > 0) {
+    const messages = [`Invalid environment variables: `];
+    for (const error of errors) {
+      messages.push(`  - ${error.property}=${error.value} (${Object.values(error.constraints || {}).join(', ')})`);
     }
     throw new Error(messages.join('\n'));
   }
-  const dto = parseResult.data;
 
   const includedWorkers = asSet(dto.IMMICH_WORKERS_INCLUDE, [ImmichWorker.Api, ImmichWorker.Microservices]);
   const excludedWorkers = asSet(dto.IMMICH_WORKERS_EXCLUDE, []);
@@ -248,6 +246,10 @@ const getEnv = (): EnvData => {
       vectorExtension = DatabaseExtension.Vector;
       break;
     }
+    case 'pgvecto.rs': {
+      vectorExtension = DatabaseExtension.Vectors;
+      break;
+    }
     case 'vectorchord': {
       vectorExtension = DatabaseExtension.VectorChord;
       break;
@@ -297,9 +299,11 @@ const getEnv = (): EnvData => {
           mount: true,
           generateId: true,
           setup: (cls, req: Request, res: Response) => {
-            const cid = req.header(ImmichHeader.CorrelationId) || cls.get(CLS_ID);
+            const headerValues = req.headers[ImmichHeader.Cid];
+            const headerValue = Array.isArray(headerValues) ? headerValues[0] : headerValues;
+            const cid = headerValue || cls.get(CLS_ID);
             cls.set(CLS_ID, cid);
-            res.header(ImmichHeader.CorrelationId, cid);
+            res.header(ImmichHeader.Cid, cid);
           },
         },
       },
@@ -316,10 +320,6 @@ const getEnv = (): EnvData => {
     },
 
     licensePublicKey: isProd ? productionKeys : stagingKeys,
-
-    versionCheck: {
-      url: isProd ? 'https://version.immich.cloud/version' : 'https://version.dev.immich.cloud/version',
-    },
 
     network: {
       trustedProxies: dto.IMMICH_TRUSTED_PROXIES ?? ['linklocal', 'uniquelocal'],
@@ -378,6 +378,7 @@ const getEnv = (): EnvData => {
     },
 
     noColor: !!dto.NO_COLOR,
+    hfToken: dto.HF_TOKEN,
   };
 };
 

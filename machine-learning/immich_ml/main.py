@@ -75,7 +75,11 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
 
 
 async def preload_models(preload: PreloadModelData) -> None:
-    log.info(f"Preloading models: clip:{preload.clip} facial_recognition:{preload.facial_recognition}")
+    log.info(
+        f"Preloading models: clip:{preload.clip} "
+        f"facial_recognition:{preload.facial_recognition} "
+        f"pet_recognition:{preload.pet_recognition}"
+    )
 
     async def load_models(model_string: str, model_type: ModelType, model_task: ModelTask) -> None:
         for model_name in model_string.split(","):
@@ -101,6 +105,20 @@ async def preload_models(preload: PreloadModelData) -> None:
             preload.facial_recognition.recognition,
             ModelType.RECOGNITION,
             ModelTask.FACIAL_RECOGNITION,
+        )
+
+    if preload.pet_recognition.detection is not None:
+        await load_models(
+            preload.pet_recognition.detection,
+            ModelType.DETECTION,
+            ModelTask.PET_RECOGNITION,
+        )
+
+    if preload.pet_recognition.recognition is not None:
+        await load_models(
+            preload.pet_recognition.recognition,
+            ModelType.RECOGNITION,
+            ModelTask.PET_RECOGNITION,
         )
 
     if preload.ocr.detection is not None:
@@ -181,27 +199,26 @@ async def predict(
     entries: InferenceEntries = Depends(get_entries),
     image: bytes | None = File(default=None),
     text: str | None = Form(default=None),
+    hfToken: str | None = Form(default=None),
 ) -> Any:
     if image is not None:
-        decoded = await run(lambda: decode_pil(image))
-        if decoded.width == 0 or decoded.height == 0:
-            raise HTTPException(400, "Image has zero width or height")
-        inputs: Image | str = decoded
+        inputs: Image | str = await run(lambda: decode_pil(image))
     elif text is not None:
         inputs = text
     else:
         raise HTTPException(400, "Either image or text must be provided")
-    response = await run_inference(inputs, entries)
+    response = await run_inference(inputs, entries, hfToken)
     return ORJSONResponse(response)
 
 
-async def run_inference(payload: Image | str, entries: InferenceEntries) -> InferenceResponse:
+async def run_inference(payload: Image | str, entries: InferenceEntries, hf_token: str | None) -> InferenceResponse:
     outputs: dict[ModelIdentity, Any] = {}
     response: InferenceResponse = {}
 
     async def _run_inference(entry: InferenceEntry) -> None:
+        options = {**entry["options"], "hfToken": hf_token}
         model = await model_cache.get(
-            entry["name"], entry["type"], entry["task"], ttl=settings.model_ttl, **entry["options"]
+            entry["name"], entry["type"], entry["task"], ttl=settings.model_ttl, **options
         )
         inputs = [payload]
         for dep in model.depends:
@@ -211,7 +228,7 @@ async def run_inference(payload: Image | str, entries: InferenceEntries) -> Infe
                 message = f"Task {entry['task']} of type {entry['type']} depends on output of {dep}"
                 raise HTTPException(400, message)
         model = await load(model)
-        output = await run(model.predict, *inputs, **entry["options"])
+        output = await run(model.predict, *inputs, **options)
         outputs[model.identity] = output
         response[entry["task"]] = output
 

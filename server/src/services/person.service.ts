@@ -29,6 +29,7 @@ import {
   JobStatus,
   Permission,
   PersonPathType,
+  PersonType,
   QueueName,
   SourceType,
   SystemMetadataKey,
@@ -43,7 +44,7 @@ import { JobItem, JobOf } from 'src/types';
 import { getDimensions } from 'src/utils/asset.util';
 import { ImmichFileResponse } from 'src/utils/file';
 import { mimeTypes } from 'src/utils/mime-types';
-import { isFacialRecognitionEnabled } from 'src/utils/misc';
+import { isFacialRecognitionEnabled, isPetRecognitionEnabled } from 'src/utils/misc';
 import { Point, transformPoints } from 'src/utils/transform';
 
 @Injectable()
@@ -184,6 +185,7 @@ export class PersonService extends BaseService {
       isHidden: dto.isHidden,
       isFavorite: dto.isFavorite,
       color: dto.color,
+      type: dto.type,
     });
 
     return mapPerson(person);
@@ -274,15 +276,50 @@ export class PersonService extends BaseService {
     }
 
     if (force) {
-      await this.personRepository.deleteFaces({ sourceType: SourceType.MachineLearning });
+      await this.personRepository.deleteFaces({ sourceType: SourceType.MachineLearning, personType: PersonType.Human });
+      await this.assetRepository.resetJobStatus('facesRecognizedAt');
       await this.handlePersonCleanup();
       await this.personRepository.vacuum({ reindexVectors: true });
     }
 
     let jobs: JobItem[] = [];
-    const assets = this.assetJobRepository.streamForDetectFacesJob(force);
+    const assets = this.assetJobRepository.streamForDetectFacesJob(PersonType.Human, force);
     for await (const asset of assets) {
       jobs.push({ name: JobName.AssetDetectFaces, data: { id: asset.id } });
+
+      if (jobs.length >= JOBS_ASSET_PAGINATION_SIZE) {
+        await this.jobRepository.queueAll(jobs);
+        jobs = [];
+      }
+    }
+
+    await this.jobRepository.queueAll(jobs);
+
+    if (force === undefined) {
+      await this.jobRepository.queue({ name: JobName.PersonCleanup });
+    }
+
+    return JobStatus.Success;
+  }
+
+  @OnJob({ name: JobName.AssetDetectPetsQueueAll, queue: QueueName.PetDetection })
+  async handleQueueDetectPets({ force }: JobOf<JobName.AssetDetectPetsQueueAll>): Promise<JobStatus> {
+    const { machineLearning } = await this.getConfig({ withCache: false });
+    if (!isPetRecognitionEnabled(machineLearning)) {
+      return JobStatus.Skipped;
+    }
+
+    if (force) {
+      await this.personRepository.deleteFaces({ sourceType: SourceType.MachineLearning, personType: PersonType.Pet });
+      await this.assetRepository.resetJobStatus('petsRecognizedAt');
+      await this.handlePersonCleanup();
+      await this.personRepository.vacuum({ reindexVectors: true });
+    }
+
+    let jobs: JobItem[] = [];
+    const assets = this.assetJobRepository.streamForDetectFacesJob(PersonType.Pet, force);
+    for await (const asset of assets) {
+      jobs.push({ name: JobName.AssetDetectPets, data: { id: asset.id } });
 
       if (jobs.length >= JOBS_ASSET_PAGINATION_SIZE) {
         await this.jobRepository.queueAll(jobs);
@@ -316,32 +353,35 @@ export class PersonService extends BaseService {
       return JobStatus.Skipped;
     }
 
-    const { imageHeight, imageWidth, faces } = await this.machineLearningRepository.detectFaces(
-      previewFile.path,
-      machineLearning.facialRecognition,
-    );
-    this.logger.debug(`${faces.length} faces detected in ${previewFile.path}`);
+    const {
+      imageHeight,
+      imageWidth,
+      faces: detectedFaces,
+    } = await this.machineLearningRepository.detectFaces(previewFile.path, machineLearning.facialRecognition);
+    this.logger.debug(`${detectedFaces.length} faces detected in ${previewFile.path}`);
+
+    const faces = detectedFaces.map((face) => ({ ...face, type: PersonType.Human }));
 
     const facesToAdd: (Insertable<AssetFaceTable> & { id: string })[] = [];
     const embeddings: FaceSearchTable[] = [];
     const mlFaceIds = new Set<string>();
 
     for (const face of asset.faces) {
-      if (face.sourceType === SourceType.MachineLearning) {
+      if (face.sourceType === SourceType.MachineLearning && face.personType === PersonType.Human) {
         mlFaceIds.add(face.id);
       }
     }
 
     const heightScale = imageHeight / (asset.faces[0]?.imageHeight || 1);
     const widthScale = imageWidth / (asset.faces[0]?.imageWidth || 1);
-    for (const { boundingBox, embedding } of faces) {
+    for (const { boundingBox, embedding, type } of faces) {
       const scaledBox = {
         x1: boundingBox.x1 * widthScale,
         y1: boundingBox.y1 * heightScale,
         x2: boundingBox.x2 * widthScale,
         y2: boundingBox.y2 * heightScale,
       };
-      const match = asset.faces.find((face) => this.iou(face, scaledBox) > 0.5);
+      const match = asset.faces.find((face) => face.personType === type && this.iou(face, scaledBox) > 0.5);
 
       if (match && !mlFaceIds.delete(match.id)) {
         embeddings.push({ faceId: match.id, embedding });
@@ -356,6 +396,7 @@ export class PersonService extends BaseService {
           boundingBoxY1: boundingBox.y1,
           boundingBoxX2: boundingBox.x2,
           boundingBoxY2: boundingBox.y2,
+          personType: type,
         });
         embeddings.push({ faceId, embedding });
       }
@@ -379,6 +420,98 @@ export class PersonService extends BaseService {
     }
 
     await this.assetRepository.upsertJobStatus({ assetId: asset.id, facesRecognizedAt: new Date() });
+
+    return JobStatus.Success;
+  }
+
+  @OnJob({ name: JobName.AssetDetectPets, queue: QueueName.PetDetection })
+  async handleDetectPets({ id }: JobOf<JobName.AssetDetectPets>): Promise<JobStatus> {
+    const { machineLearning } = await this.getConfig({ withCache: true });
+    if (!isPetRecognitionEnabled(machineLearning)) {
+      return JobStatus.Skipped;
+    }
+
+    const asset = await this.assetJobRepository.getForDetectFacesJob(id);
+    const previewFile = asset?.files[0];
+    if (!asset || asset.files.length !== 1 || !previewFile) {
+      return JobStatus.Failed;
+    }
+
+    if (asset.visibility === AssetVisibility.Hidden) {
+      return JobStatus.Skipped;
+    }
+
+    const {
+      imageHeight,
+      imageWidth,
+      faces: detectedPets,
+    } = await this.machineLearningRepository.detectPets(previewFile.path, {
+      ...machineLearning.petRecognition,
+      detectionModelName: machineLearning.petRecognition.detectionModelName,
+      recognitionModelName: machineLearning.petRecognition.recognitionModelName,
+    });
+    this.logger.debug(`${detectedPets.length} pets detected in ${previewFile.path}`);
+
+    const faces = detectedPets.map((pet) => ({ ...pet, type: PersonType.Pet }));
+
+    const facesToAdd: (Insertable<AssetFaceTable> & { id: string })[] = [];
+    const embeddings: FaceSearchTable[] = [];
+    const mlFaceIds = new Set<string>();
+
+    for (const face of asset.faces) {
+      if (face.sourceType === SourceType.MachineLearning && face.personType === PersonType.Pet) {
+        mlFaceIds.add(face.id);
+      }
+    }
+
+    const heightScale = imageHeight / (asset.faces[0]?.imageHeight || 1);
+    const widthScale = imageWidth / (asset.faces[0]?.imageWidth || 1);
+    for (const { boundingBox, embedding, type } of faces) {
+      const scaledBox = {
+        x1: boundingBox.x1 * widthScale,
+        y1: boundingBox.y1 * heightScale,
+        x2: boundingBox.x2 * widthScale,
+        y2: boundingBox.y2 * heightScale,
+      };
+      const match = asset.faces.find((face) => face.personType === type && this.iou(face, scaledBox) > 0.5);
+
+      if (match && !mlFaceIds.delete(match.id)) {
+        embeddings.push({ faceId: match.id, embedding });
+      } else if (!match) {
+        const faceId = this.cryptoRepository.randomUUID();
+        facesToAdd.push({
+          id: faceId,
+          assetId: asset.id,
+          imageHeight,
+          imageWidth,
+          boundingBoxX1: boundingBox.x1,
+          boundingBoxY1: boundingBox.y1,
+          boundingBoxX2: boundingBox.x2,
+          boundingBoxY2: boundingBox.y2,
+          personType: type,
+        });
+        embeddings.push({ faceId, embedding });
+      }
+    }
+    const faceIdsToRemove = [...mlFaceIds];
+
+    if (facesToAdd.length > 0 || faceIdsToRemove.length > 0 || embeddings.length > 0) {
+      await this.personRepository.refreshFaces(facesToAdd, faceIdsToRemove, embeddings);
+    }
+
+    if (faceIdsToRemove.length > 0) {
+      this.logger.log(`Removed ${faceIdsToRemove.length} pets below detection threshold in asset ${id}`);
+    }
+
+    if (facesToAdd.length > 0) {
+      this.logger.log(`Detected ${facesToAdd.length} new pets in asset ${id}`);
+      const jobs = facesToAdd.map((face) => ({ name: JobName.PetRecognition, data: { id: face.id } }) as const);
+      await this.jobRepository.queueAll([{ name: JobName.PetRecognitionQueueAll, data: { force: false } }, ...jobs]);
+    } else if (embeddings.length > 0) {
+      this.logger.log(`Added ${embeddings.length} pet embeddings for asset ${id}`);
+    }
+
+    await this.assetRepository.upsertJobStatus({ assetId: asset.id, petsRecognizedAt: new Date() });
 
     return JobStatus.Success;
   }
@@ -424,7 +557,10 @@ export class PersonService extends BaseService {
     const { waiting } = await this.jobRepository.getJobCounts(QueueName.FacialRecognition);
 
     if (force) {
-      await this.personRepository.unassignFaces({ sourceType: SourceType.MachineLearning });
+      await this.personRepository.unassignFaces({
+        sourceType: SourceType.MachineLearning,
+        personType: PersonType.Human,
+      });
       await this.handlePersonCleanup();
       await this.personRepository.vacuum({ reindexVectors: false });
     } else if (waiting) {
@@ -438,7 +574,9 @@ export class PersonService extends BaseService {
 
     const lastRun = new Date().toISOString();
     const facePagination = this.personRepository.getAllFaces(
-      force ? undefined : { personId: null, sourceType: SourceType.MachineLearning },
+      force
+        ? { personType: PersonType.Human }
+        : { personId: null, sourceType: SourceType.MachineLearning, personType: PersonType.Human },
     );
 
     let jobs: { name: JobName.FacialRecognition; data: { id: string; deferred: false } }[] = [];
@@ -454,6 +592,51 @@ export class PersonService extends BaseService {
     await this.jobRepository.queueAll(jobs);
 
     await this.systemMetadataRepository.set(SystemMetadataKey.FacialRecognitionState, { lastRun });
+
+    return JobStatus.Success;
+  }
+
+  @OnJob({ name: JobName.PetRecognitionQueueAll, queue: QueueName.PetRecognition })
+  async handleQueueRecognizePets({ force }: JobOf<JobName.PetRecognitionQueueAll>): Promise<JobStatus> {
+    const { machineLearning } = await this.getConfig({ withCache: false });
+    if (!isPetRecognitionEnabled(machineLearning)) {
+      return JobStatus.Skipped;
+    }
+
+    await this.jobRepository.waitForQueueCompletion(QueueName.ThumbnailGeneration, QueueName.PetDetection);
+
+    const { waiting } = await this.jobRepository.getJobCounts(QueueName.PetRecognition);
+
+    if (force) {
+      await this.personRepository.unassignFaces({ sourceType: SourceType.MachineLearning, personType: PersonType.Pet });
+      await this.handlePersonCleanup();
+      await this.personRepository.vacuum({ reindexVectors: false });
+    } else if (waiting) {
+      this.logger.debug(
+        `Skipping pet recognition queueing because ${waiting} job${waiting > 1 ? 's are' : ' is'} already queued`,
+      );
+      return JobStatus.Skipped;
+    }
+
+    await this.databaseRepository.prewarm(VectorIndex.Face);
+
+    const facePagination = this.personRepository.getAllFaces(
+      force
+        ? { personType: PersonType.Pet }
+        : { personId: null, sourceType: SourceType.MachineLearning, personType: PersonType.Pet },
+    );
+
+    let jobs: { name: JobName.PetRecognition; data: { id: string; deferred: false } }[] = [];
+    for await (const face of facePagination) {
+      jobs.push({ name: JobName.PetRecognition, data: { id: face.id, deferred: false } });
+
+      if (jobs.length === JOBS_ASSET_PAGINATION_SIZE) {
+        await this.jobRepository.queueAll(jobs);
+        jobs = [];
+      }
+    }
+
+    await this.jobRepository.queueAll(jobs);
 
     return JobStatus.Success;
   }
@@ -492,6 +675,7 @@ export class PersonService extends BaseService {
       maxDistance: machineLearning.facialRecognition.maxDistance,
       numResults: machineLearning.facialRecognition.minFaces,
       minBirthDate: new Date(face.asset.fileCreatedAt),
+      personType: face.personType,
     });
 
     // `matches` also includes the face itself
@@ -520,6 +704,7 @@ export class PersonService extends BaseService {
         numResults: 1,
         hasPerson: true,
         minBirthDate: new Date(face.asset.fileCreatedAt),
+        personType: face.personType,
       });
 
       if (matchWithPerson.length > 0) {
@@ -528,14 +713,107 @@ export class PersonService extends BaseService {
     }
 
     if (isCore && !personId) {
-      this.logger.log(`Creating new person for face ${id}`);
-      const newPerson = await this.personRepository.create({ ownerId: face.asset.ownerId, faceAssetId: face.id });
+      this.logger.log(`Creating new person for face ${id} with type ${face.personType}`);
+      const newPerson = await this.personRepository.create({
+        ownerId: face.asset.ownerId,
+        faceAssetId: face.id,
+        type: face.personType,
+      });
       await this.jobRepository.queue({ name: JobName.PersonGenerateThumbnail, data: { id: newPerson.id } });
       personId = newPerson.id;
     }
 
     if (personId) {
       this.logger.debug(`Assigning face ${id} to person ${personId}`);
+      await this.personRepository.reassignFaces({ faceIds: [id], newPersonId: personId });
+    }
+
+    return JobStatus.Success;
+  }
+
+  @OnJob({ name: JobName.PetRecognition, queue: QueueName.PetRecognition })
+  async handleRecognizePets({ id, deferred }: JobOf<JobName.PetRecognition>): Promise<JobStatus> {
+    const { machineLearning } = await this.getConfig({ withCache: true });
+    if (!isPetRecognitionEnabled(machineLearning)) {
+      return JobStatus.Skipped;
+    }
+
+    const face = await this.personRepository.getFaceForFacialRecognitionJob(id);
+    if (!face || !face.asset) {
+      this.logger.warn(`Pet face ${id} not found`);
+      return JobStatus.Failed;
+    }
+
+    if (face.sourceType !== SourceType.MachineLearning) {
+      this.logger.warn(`Skipping pet face ${id} due to source ${face.sourceType}`);
+      return JobStatus.Skipped;
+    }
+
+    if (!face.faceSearch?.embedding) {
+      this.logger.warn(`Pet face ${id} does not have an embedding`);
+      return JobStatus.Failed;
+    }
+
+    if (face.personId) {
+      this.logger.debug(`Pet face ${id} already has a person assigned`);
+      return JobStatus.Skipped;
+    }
+
+    const matches = await this.searchRepository.searchFaces({
+      userIds: [face.asset.ownerId],
+      embedding: face.faceSearch.embedding,
+      maxDistance: machineLearning.petRecognition.maxDistance,
+      numResults: machineLearning.petRecognition.minFaces,
+      minBirthDate: new Date(face.asset.fileCreatedAt),
+      personType: face.personType,
+    });
+
+    // `matches` also includes the face itself
+    if (machineLearning.petRecognition.minFaces > 1 && matches.length <= 1) {
+      this.logger.debug(`Pet face ${id} only matched the face itself, skipping`);
+      return JobStatus.Skipped;
+    }
+
+    this.logger.debug(`Pet face ${id} has ${matches.length} matches`);
+
+    const isCore =
+      matches.length >= machineLearning.petRecognition.minFaces && face.asset.visibility === AssetVisibility.Timeline;
+    if (!isCore && !deferred) {
+      this.logger.debug(`Deferring non-core pet face ${id} for later processing`);
+      await this.jobRepository.queue({ name: JobName.PetRecognition, data: { id, deferred: true } });
+      return JobStatus.Skipped;
+    }
+
+    let personId = matches.find((match) => match.personId)?.personId;
+    if (!personId) {
+      const matchWithPerson = await this.searchRepository.searchFaces({
+        userIds: [face.asset.ownerId],
+        embedding: face.faceSearch.embedding,
+        maxDistance: machineLearning.petRecognition.maxDistance,
+        numResults: 1,
+        hasPerson: true,
+        minBirthDate: new Date(face.asset.fileCreatedAt),
+        personType: face.personType,
+      });
+
+      if (matchWithPerson.length > 0) {
+        personId = matchWithPerson[0].personId;
+      }
+    }
+
+    if (isCore && !personId) {
+      this.logger.log(`Creating new person for pet face ${id} with type ${face.personType}`);
+      const newPerson = await this.personRepository.create({
+        ownerId: face.asset.ownerId,
+        faceAssetId: face.id,
+        type: face.personType,
+      });
+      await this.jobRepository.queue({ name: JobName.PersonGenerateThumbnail, data: { id: newPerson.id } });
+      personId = newPerson.id;
+    }
+
+    if (personId) {
+      this.logger.debug(`Assigning pet face ${id} to person ${personId}`);
       await this.personRepository.reassignFaces({ faceIds: [id], newPersonId: personId });
     }
 
@@ -631,11 +909,7 @@ export class PersonService extends BaseService {
       this.requireAccess({ auth, permission: Permission.PersonRead, ids: [dto.personId] }),
     ]);
 
-    const [asset, person] = await Promise.all([
-      this.assetRepository.getById(dto.assetId, { edits: true, exifInfo: true }),
-      this.findOrFail(dto.personId),
-    ]);
-
+    const asset = await this.assetRepository.getById(dto.assetId, { edits: true, exifInfo: true });
     if (!asset) {
       throw new NotFoundException('Asset not found');
     }
@@ -693,10 +967,6 @@ export class PersonService extends BaseService {
       boundingBoxY2: Math.round(bottomRight.y),
       sourceType: SourceType.Manual,
     });
-
-    if (!person.faceAssetId) {
-      await this.createNewFeaturePhoto([person.id]);
-    }
   }
 
   async deleteFace(auth: AuthDto, id: string, dto: AssetFaceDeleteDto): Promise<void> {

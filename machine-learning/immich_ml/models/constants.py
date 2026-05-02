@@ -88,6 +88,19 @@ _PADDLE_MODELS = {
     "TH__PP-OCRv5_mobile",
 }
 
+
+_YOLOV8_MODELS = set()
+
+
+_MEGADESCRIPTOR_MODELS = set()
+
+
+_PET_RECOGNITION_BUNDLE_MODELS = {
+    "pet-recognition",
+    "yolov8n",
+    "MegaDescriptor-L-384",
+}
+
 SUPPORTED_PROVIDERS = [
     "CUDAExecutionProvider",
     "MIGraphXExecutionProvider",
@@ -174,5 +187,14 @@ def get_model_source(model_name: str) -> ModelSource | None:
 
     if cleaned_name in _PADDLE_MODELS:
         return ModelSource.PADDLE
+
+    if cleaned_name in _YOLOV8_MODELS:
+        return ModelSource.YOLOV8
+
+    if cleaned_name in _MEGADESCRIPTOR_MODELS:
+        return ModelSource.MEGADESCRIPTOR
+
+    if cleaned_name in _PET_RECOGNITION_BUNDLE_MODELS:
+        return ModelSource.PET_RECOGNITION_BUNDLE
 
     return None

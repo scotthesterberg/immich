@@ -65,7 +65,12 @@ export interface DecodeToBufferOptions extends DecodeImageOptions {
 }
 
 export type GenerateThumbnailOptions = Pick<ImageOptions, 'format' | 'quality' | 'progressive'> & DecodeToBufferOptions;
+
+export type GenerateThumbnailFromBufferOptions = GenerateThumbnailOptions & { raw: RawImageInfo };
+
 export type GenerateThumbhashOptions = DecodeImageOptions;
+
+export type GenerateThumbhashFromBufferOptions = GenerateThumbhashOptions & { raw: RawImageInfo };
 
 export interface GenerateThumbnailsOptions {
   colorspace: string;
@@ -166,6 +171,7 @@ export type ConcurrentQueueName = Exclude<
   QueueName,
   | QueueName.StorageTemplateMigration
   | QueueName.FacialRecognition
+  | QueueName.PetRecognition
   | QueueName.DuplicateDetection
   | QueueName.BackupDatabase
 >;
@@ -249,7 +255,6 @@ export interface INotifySignupJob extends IEntityJob {
 
 export interface INotifyAlbumInviteJob extends IEntityJob {
   recipientId: string;
-  senderName: string;
 }
 
 export interface INotifyAlbumUpdateJob extends IEntityJob, IDelayedJob {
@@ -326,8 +331,12 @@ export type JobItem =
   // Facial Recognition
   | { name: JobName.AssetDetectFacesQueueAll; data: IBaseJob }
   | { name: JobName.AssetDetectFaces; data: IEntityJob }
+  | { name: JobName.AssetDetectPetsQueueAll; data: IBaseJob }
+  | { name: JobName.AssetDetectPets; data: IEntityJob }
   | { name: JobName.FacialRecognitionQueueAll; data: INightlyJob }
   | { name: JobName.FacialRecognition; data: IDeferrableJob }
+  | { name: JobName.PetRecognitionQueueAll; data: INightlyJob }
+  | { name: JobName.PetRecognition; data: IDeferrableJob }
   | { name: JobName.PersonGenerateThumbnail; data: IEntityJob }
 
   // Smart Search
@@ -347,6 +356,7 @@ export type JobItem =
   | { name: JobName.FileDelete; data: IDeleteFilesJob }
 
   // Cleanup
+  | { name: JobName.AuditLogCleanup; data?: IBaseJob }
   | { name: JobName.SessionCleanup; data?: IBaseJob }
 
   // Tags
@@ -392,6 +402,10 @@ export interface ExtensionVersion {
   name: VectorExtension;
   availableVersion: string | null;
   installedVersion: string | null;
+}
+
+export interface VectorUpdateResult {
+  restartRequired: boolean;
 }
 
 export interface ImmichFile extends Express.Multer.File {

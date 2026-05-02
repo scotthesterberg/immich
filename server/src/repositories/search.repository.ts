@@ -1,21 +1,25 @@
 import { Injectable } from '@nestjs/common';
 import { Kysely, OrderByDirection, Selectable, ShallowDehydrateObject, sql } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
+import { randomUUID } from 'node:crypto';
 import { DummyValue, GenerateSql } from 'src/decorators';
-import { AssetStatus, AssetType, AssetVisibility, VectorIndex } from 'src/enum';
+import { MapAsset } from 'src/dtos/asset-response.dto';
+import { AssetStatus, AssetType, AssetVisibility, PersonType, VectorIndex } from 'src/enum';
 import { probes } from 'src/repositories/database.repository';
 import { DB } from 'src/schema';
 import { AssetExifTable } from 'src/schema/tables/asset-exif.table';
-import { anyUuid, searchAssetBuilder, withExifInner } from 'src/utils/database';
+import { anyUuid, searchAssetBuilder, withExif } from 'src/utils/database';
 import { paginationHelper } from 'src/utils/pagination';
 import { isValidInteger } from 'src/validation';
 
 export interface SearchAssetIdOptions {
   checksum?: Buffer;
+  deviceAssetId?: string;
   id?: string;
 }
 
 export interface SearchUserIdOptions {
+  deviceId?: string;
   libraryId?: string | null;
   userIds?: string[];
 }
@@ -140,6 +144,7 @@ export interface FaceEmbeddingSearch extends SearchEmbeddingOptions {
   numResults: number;
   maxDistance: number;
   minBirthDate?: Date | null;
+  personType?: PersonType;
 }
 
 export interface FaceSearchResult {
@@ -234,11 +239,20 @@ export class SearchRepository {
     ],
   })
   async searchRandom(size: number, options: AssetSearchOptions) {
-    return searchAssetBuilder(this.db, options)
+    const uuid = randomUUID();
+    const builder = searchAssetBuilder(this.db, options);
+    const lessThan = builder
       .selectAll('asset')
+      .where('asset.id', '<', uuid)
       .orderBy(sql`random()`)
-      .limit(size)
-      .execute();
+      .limit(size);
+    const greaterThan = builder
+      .selectAll('asset')
+      .where('asset.id', '>', uuid)
+      .orderBy(sql`random()`)
+      .limit(size);
+    const { rows } = await sql<MapAsset>`${lessThan} union all ${greaterThan} limit ${size}`.execute(this.db);
+    return rows;
   }
 
   @GenerateSql({
@@ -257,7 +271,7 @@ export class SearchRepository {
     const orderDirection = (options.orderDirection?.toLowerCase() || 'desc') as OrderByDirection;
     return searchAssetBuilder(this.db, options)
       .selectAll('asset')
-      .$call(withExifInner)
+      .$call(withExif)
       .where('asset_exif.fileSizeInByte', '>', options.minFileSize || 0)
       .orderBy('asset_exif.fileSizeInByte', orderDirection)
       .limit(size)
@@ -312,7 +326,15 @@ export class SearchRepository {
       },
     ],
   })
-  searchFaces({ userIds, embedding, numResults, maxDistance, hasPerson, minBirthDate }: FaceEmbeddingSearch) {
+  searchFaces({
+    userIds,
+    embedding,
+    numResults,
+    maxDistance,
+    hasPerson,
+    minBirthDate,
+    personType,
+  }: FaceEmbeddingSearch) {
     if (!isValidInteger(numResults, { min: 1, max: 1000 })) {
       throw new Error(`Invalid value for 'numResults': ${numResults}`);
     }
@@ -333,6 +355,7 @@ export class SearchRepository {
             .leftJoin('person', 'person.id', 'asset_face.personId')
             .where('asset.ownerId', '=', anyUuid(userIds))
             .where('asset.deletedAt', 'is', null)
+            .$if(!!personType, (qb) => qb.where('asset_face.personType', '=', personType!))
             .$if(!!hasPerson, (qb) => qb.where('asset_face.personId', 'is not', null))
             .$if(!!minBirthDate, (qb) =>
               qb.where((eb) =>
