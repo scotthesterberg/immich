@@ -105,7 +105,7 @@ export type Memory = {
   showAt: Date | null;
   hideAt: Date | null;
   type: MemoryType;
-  data: any;
+  data: Record<string, unknown>;
   ownerId: string;
   isSaved: boolean;
   assets: ShallowDehydrateObject<MapAsset>[];
@@ -328,10 +328,10 @@ const userWithPrefixColumns = [
 export const columns = {
   asset: [
     'asset.id',
-    'asset.deviceAssetId',
-    'asset.deviceId',
     'asset.checksum',
     'asset.checksumAlgorithm',
+    'asset.deviceAssetId',
+    'asset.deviceId',
     'asset.fileCreatedAt',
     'asset.fileModifiedAt',
     'asset.isExternal',
@@ -380,8 +380,6 @@ export const columns = {
   notification: ['id', 'createdAt', 'level', 'type', 'title', 'description', 'data', 'readAt'],
   syncAsset: [
     'asset.id',
-    'asset.deviceAssetId',
-    'asset.deviceId',
     'asset.ownerId',
     'asset.originalFileName',
     'asset.thumbhash',

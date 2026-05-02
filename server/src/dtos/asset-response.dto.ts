@@ -260,6 +260,8 @@ export function mapAsset(entity: MaybeDehydrated<MapAsset>, options: AssetMapOpt
       ?.filter((face) => !face.person)
       .map((face: any) => mapFacesWithoutPerson(face, entity.edits, assetDimensions)),
     checksum: hexOrBufferToBase64(entity.checksum)!,
+    deviceAssetId: (entity as any).deviceAssetId,
+    deviceId: (entity as any).deviceId,
     stack: withStack ? mapStack(entity) : undefined,
     isOffline: entity.isOffline,
     hasMetadata: true,

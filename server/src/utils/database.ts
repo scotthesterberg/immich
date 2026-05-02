@@ -15,7 +15,8 @@ import {
 import { PostgresJSDialect } from 'kysely-postgres-js';
 import { jsonArrayFrom, jsonObjectFrom } from 'kysely/helpers/postgres';
 import { Notice, PostgresError } from 'postgres';
-import { columns, lockableProperties, LockableProperty, Person } from 'src/database';
+export { columns } from 'src/database';
+import { lockableProperties, LockableProperty, Person } from 'src/database';
 import { AssetEditActionItem } from 'src/dtos/editing.dto';
 import { AssetFileType, AssetVisibility, DatabaseExtension } from 'src/enum';
 import { AssetSearchBuilderOptions } from 'src/repositories/search.repository';
@@ -52,7 +53,9 @@ export const getKyselyConfig = (connection: DatabaseConnectionParams): KyselyCon
   };
 };
 
+export const asUuid = (id: string | Expression<string>) => sql<string>`${id}::uuid`;
 
+export const anyUuid = (ids: string[]) => sql<string>`any(${`{${ids}}`}::uuid[])`;
 
 export const asVector = (embedding: number[]) => sql<string>`${`[${embedding}]`}::vector`;
 
@@ -444,5 +447,6 @@ export const updateLockedColumns = <T extends Record<string, unknown> & { locked
   return exif;
 };
 
+export const dummy = sql`(select 1)`.as('dummy');
 
 export const dummy = sql`(select 1)`.as('dummy');
