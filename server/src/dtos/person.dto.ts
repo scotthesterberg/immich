@@ -105,7 +105,7 @@ export const AssetFaceWithoutPersonResponseSchema = z
   .describe('Asset face without person')
   .meta({ id: 'AssetFaceWithoutPersonResponseDto' });
 
-class AssetFaceWithoutPersonResponseDto extends createZodDto(AssetFaceWithoutPersonResponseSchema) {}
+export class AssetFaceWithoutPersonResponseDto extends createZodDto(AssetFaceWithoutPersonResponseSchema) {}
 
 export const PersonWithFacesResponseSchema = PersonResponseSchema.extend({
   faces: z.array(AssetFaceWithoutPersonResponseSchema),
@@ -190,6 +190,7 @@ export function mapPerson(person: MaybeDehydrated<Person>): PersonResponseDto {
     isFavorite: person.isFavorite,
     color: person.color ?? undefined,
     updatedAt: asDateString(person.updatedAt),
+    type: (person as any).type,
   };
 }
 
@@ -213,6 +214,8 @@ export function mapFacesWithoutPerson(
       assetDimensions ?? { width: face.imageWidth, height: face.imageHeight },
     ),
     sourceType: face.sourceType,
+    personType: (face as any).personType,
+    personId: face.personId,
   };
 }
 

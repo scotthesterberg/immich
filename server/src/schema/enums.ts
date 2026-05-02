@@ -37,3 +37,8 @@ export const video_stream_variant_codec_enum = registerEnum({
   name: 'video_stream_variant_codec_enum',
   values: Object.values(VideoSegmentCodec),
 });
+
+export const person_type_enum = registerEnum({
+  name: 'person_type_enum',
+  values: ['HUMAN', 'PET'],
+});

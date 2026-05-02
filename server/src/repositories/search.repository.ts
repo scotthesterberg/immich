@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Kysely, OrderByDirection, Selectable, ShallowDehydrateObject, sql } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
 import { DummyValue, GenerateSql } from 'src/decorators';
-import { AssetStatus, AssetType, AssetVisibility, VectorIndex } from 'src/enum';
+import { AssetStatus, AssetType, AssetVisibility, PersonType, VectorIndex } from 'src/enum';
 import { probes } from 'src/repositories/database.repository';
 import { DB } from 'src/schema';
 import { AssetExifTable } from 'src/schema/tables/asset-exif.table';
@@ -140,6 +140,7 @@ export interface FaceEmbeddingSearch extends SearchEmbeddingOptions {
   numResults: number;
   maxDistance: number;
   minBirthDate?: Date | null;
+  personType?: any;
 }
 
 export interface FaceSearchResult {
@@ -333,6 +334,7 @@ export class SearchRepository {
             .leftJoin('person', 'person.id', 'asset_face.personId')
             .where('asset.ownerId', '=', anyUuid(userIds))
             .where('asset.deletedAt', 'is', null)
+            .$if(!!personType, (qb) => qb.where('asset_face.personType' as any, '=', personType!))
             .$if(!!hasPerson, (qb) => qb.where('asset_face.personId', 'is not', null))
             .$if(!!minBirthDate, (qb) =>
               qb.where((eb) =>
@@ -388,6 +390,7 @@ export class SearchRepository {
           .where('asset.visibility', '=', AssetVisibility.Timeline)
           .where('asset.type', '=', AssetType.Image)
           .where('asset.deletedAt', 'is', null)
+            .$if(!!personType, (qb) => qb.where('asset_face.personType' as any, '=', personType!))
           .orderBy('city')
           .limit(1);
 
@@ -404,6 +407,7 @@ export class SearchRepository {
                 .where('asset.visibility', '=', AssetVisibility.Timeline)
                 .where('asset.type', '=', AssetType.Image)
                 .where('asset.deletedAt', 'is', null)
+            .$if(!!personType, (qb) => qb.where('asset_face.personType' as any, '=', personType!))
                 .whereRef('asset_exif.city', '>', 'cte.city')
                 .orderBy('city')
                 .limit(1)

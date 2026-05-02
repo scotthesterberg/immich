@@ -52,9 +52,7 @@ export const getKyselyConfig = (connection: DatabaseConnectionParams): KyselyCon
   };
 };
 
-export const asUuid = (id: string | Expression<string>) => sql<string>`${id}::uuid`;
 
-export const anyUuid = (ids: string[]) => sql<string>`any(${`{${ids}}`}::uuid[])`;
 
 export const asVector = (embedding: number[]) => sql<string>`${`[${embedding}]`}::vector`;
 
@@ -446,8 +444,7 @@ export const updateLockedColumns = <T extends Record<string, unknown> & { locked
   return exif;
 };
 
-export const dummy = sql`(select 1)`.as('dummy');
 
-export const asUuid = (id: string) => sql<string>`${id}::uuid`;
+export const asUuid = (id: string | Expression<any>) => sql<string>`${id}::uuid`;
 export const anyUuid = (ids: string[]) => sql<string>`ANY(${sql.val(ids)}::uuid[])`;
 export const dummy = sql`(select 1)`.as('dummy');

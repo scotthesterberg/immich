@@ -4,6 +4,7 @@ import {
   CLIPConfigSchema,
   DuplicateDetectionConfigSchema,
   FacialRecognitionConfigSchema,
+  PetRecognitionConfigSchema,
   OcrConfigSchema,
 } from 'src/dtos/model-config.dto';
 import {
@@ -92,6 +93,7 @@ const SystemConfigJobSchema = z
     metadataExtraction: JobSettingsSchema,
     videoConversion: JobSettingsSchema,
     faceDetection: JobSettingsSchema,
+    petDetection: any,
     smartSearch: JobSettingsSchema,
     backgroundTask: JobSettingsSchema,
     migration: JobSettingsSchema,
@@ -143,6 +145,7 @@ const SystemConfigMachineLearningSchema = z
     clip: CLIPConfigSchema,
     duplicateDetection: DuplicateDetectionConfigSchema,
     facialRecognition: FacialRecognitionConfigSchema,
+    petRecognition: any,
     ocr: OcrConfigSchema,
   })
   .meta({ id: 'SystemConfigMachineLearningDto' });
@@ -383,6 +386,6 @@ export class SystemConfigSmtpDto extends createZodDto(SystemConfigSmtpSchema) {}
 export class SystemConfigTemplateStorageOptionDto extends createZodDto(SystemConfigTemplateStorageOptionSchema) {}
 export class SystemConfigDto extends createZodDto(SystemConfigSchema) {}
 
-export function mapConfig(config: SystemConfig): SystemConfigDto {
+export function mapConfig(config: SystemConfig): any {
   return config;
 }

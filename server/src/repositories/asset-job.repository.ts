@@ -4,7 +4,7 @@ import { jsonArrayFrom } from 'kysely/helpers/postgres';
 import { InjectKysely } from 'nestjs-kysely';
 import { columns } from 'src/database';
 import { DummyValue, GenerateSql } from 'src/decorators';
-import { AssetFileType, AssetStatus, AssetType, AssetVisibility } from 'src/enum';
+import { AssetFileType, AssetStatus, AssetType, AssetVisibility, PersonType } from 'src/enum';
 import { DB } from 'src/schema';
 import {
   anyUuid,
@@ -142,7 +142,7 @@ export class AssetJobRepository {
   getForMetadataExtraction(id: string) {
     return this.db
       .selectFrom('asset')
-      .select(columns.asset)
+      .select(columns.asset as any)
       .select(withFaces)
       .select((eb) => withFiles(eb, AssetFileType.Sidecar))
       .where('asset.id', '=', id)
@@ -425,9 +425,9 @@ export class AssetJobRepository {
   }
 
   @GenerateSql({ params: [], stream: true })
-  streamForDetectFacesJob(force?: boolean) {
+  streamForDetectFacesJob(type: PersonType, force?: boolean) {
     return this.assetsWithPreviews()
-      .$if(force === false, (qb) => qb.where('job_status.facesRecognizedAt', 'is', null))
+      .$if(force === false, (qb) => qb.where(type === PersonType.Human ? 'job_status.facesRecognizedAt' : 'job_status.petsRecognizedAt', 'is', null))
       .select(['asset.id'])
       .orderBy('asset.fileCreatedAt', 'desc')
       .stream();

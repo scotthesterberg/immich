@@ -181,7 +181,7 @@ const peopleWithFaces = (
 
   const peopleFaces: Map<string, PersonWithFacesResponseDto> = new Map();
 
-  for (const face of faces) {
+  for (const face of faces as any[]) {
     if (!face.person) {
       continue;
     }
@@ -258,8 +258,10 @@ export function mapAsset(entity: MaybeDehydrated<MapAsset>, options: AssetMapOpt
     people: peopleWithFaces(entity.faces, entity.edits, assetDimensions),
     unassignedFaces: entity.faces
       ?.filter((face) => !face.person)
-      .map((face) => mapFacesWithoutPerson(face, entity.edits, assetDimensions)),
+      .map((face: any) => mapFacesWithoutPerson(face, entity.edits, assetDimensions)),
     checksum: hexOrBufferToBase64(entity.checksum)!,
+    deviceAssetId: (entity as any).deviceAssetId,
+    deviceId: (entity as any).deviceId,
     stack: withStack ? mapStack(entity) : undefined,
     isOffline: entity.isOffline,
     hasMetadata: true,

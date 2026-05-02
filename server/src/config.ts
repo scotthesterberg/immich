@@ -46,7 +46,7 @@ export type SystemConfig = {
     accelDecode: boolean;
     tonemap: ToneMapping;
   };
-  job: Record<ConcurrentQueueName, { concurrency: number }>;
+  job: any;
   logging: {
     enabled: boolean;
     level: LogLevel;
