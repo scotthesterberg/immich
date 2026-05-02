@@ -115,8 +115,6 @@ export type Asset = {
   id: string;
   checksum: Buffer<ArrayBufferLike>;
   checksumAlgorithm: ChecksumAlgorithm;
-  deviceAssetId: string;
-  deviceId: string;
   fileCreatedAt: Date;
   fileModifiedAt: Date;
   isExternal: boolean;
@@ -332,8 +330,6 @@ export const columns = {
     'asset.id',
     'asset.checksum',
     'asset.checksumAlgorithm',
-    'asset.deviceAssetId',
-    'asset.deviceId',
     'asset.fileCreatedAt',
     'asset.fileModifiedAt',
     'asset.isExternal',

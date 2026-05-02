@@ -142,7 +142,7 @@ export class AssetJobRepository {
   getForMetadataExtraction(id: string) {
     return this.db
       .selectFrom('asset')
-      .select(columns.asset as any)
+      .select(columns.asset)
       .select(withFaces)
       .select((eb) => withFiles(eb, AssetFileType.Sidecar))
       .where('asset.id', '=', id)

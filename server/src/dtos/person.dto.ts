@@ -190,7 +190,6 @@ export function mapPerson(person: MaybeDehydrated<Person>): PersonResponseDto {
     isFavorite: person.isFavorite,
     color: person.color ?? undefined,
     updatedAt: asDateString(person.updatedAt),
-    type: (person as any).type,
   };
 }
 
@@ -214,8 +213,6 @@ export function mapFacesWithoutPerson(
       assetDimensions ?? { width: face.imageWidth, height: face.imageHeight },
     ),
     sourceType: face.sourceType,
-    personType: (face as any).personType,
-    personId: face.personId,
   };
 }
 
