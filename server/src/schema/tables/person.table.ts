@@ -5,19 +5,23 @@ import {
   CreateDateColumn,
   ForeignKeyColumn,
   Generated,
+  Index,
   PrimaryGeneratedColumn,
   Table,
   Timestamp,
   UpdateDateColumn,
 } from '@immich/sql-tools';
 import { UpdatedAtTrigger, UpdateIdColumn } from 'src/decorators';
-import { PersonType } from 'src/enum';
-import { person_type_enum } from 'src/schema/enums';
 import { person_delete_audit } from 'src/schema/functions';
 import { AssetFaceTable } from 'src/schema/tables/asset-face.table';
 import { UserTable } from 'src/schema/tables/user.table';
 
 @Table('person')
+@Index({
+  name: 'idx_person_name_trigram',
+  using: 'gin',
+  expression: 'f_unaccent("name") gin_trgm_ops',
+})
 @UpdatedAtTrigger('person_updatedAt')
 @AfterDeleteTrigger({
   scope: 'statement',
@@ -50,9 +54,6 @@ export class PersonTable {
 
   @Column({ type: 'date', nullable: true })
   birthDate!: Timestamp | null;
-
-  @Column({ enum: person_type_enum, default: PersonType.Human })
-  type!: Generated<PersonType>;
 
   @ForeignKeyColumn(() => AssetFaceTable, { onDelete: 'SET NULL', nullable: true })
   faceAssetId!: string | null;

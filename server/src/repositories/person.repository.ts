@@ -4,12 +4,12 @@ import { jsonObjectFrom } from 'kysely/helpers/postgres';
 import { InjectKysely } from 'nestjs-kysely';
 import { AssetFace } from 'src/database';
 import { Chunked, ChunkedArray, DummyValue, GenerateSql } from 'src/decorators';
-import { AssetFileType, AssetVisibility, PersonType, SourceType } from 'src/enum';
+import { AssetFileType, AssetVisibility, SourceType } from 'src/enum';
 import { DB } from 'src/schema';
 import { AssetFaceTable } from 'src/schema/tables/asset-face.table';
 import { FaceSearchTable } from 'src/schema/tables/face-search.table';
 import { PersonTable } from 'src/schema/tables/person.table';
-import { removeUndefinedKeys } from 'src/utils/database';
+import { dummy, removeUndefinedKeys, withFilePath } from 'src/utils/database';
 import { paginationHelper, PaginationOptions } from 'src/utils/pagination';
 
 export interface PersonSearchOptions {
@@ -44,7 +44,6 @@ export interface PersonStatistics {
 
 export interface DeleteFacesOptions {
   sourceType: SourceType;
-  personType?: PersonType;
 }
 
 export interface GetAllPeopleOptions {
@@ -58,13 +57,9 @@ export interface GetAllFacesOptions {
   personId?: string | null;
   assetId?: string;
   sourceType?: SourceType;
-  personType?: PersonType;
 }
 
-export interface UnassignFacesOptions {
-  sourceType: SourceType;
-  personType?: PersonType;
-}
+export type UnassignFacesOptions = DeleteFacesOptions;
 
 export type SelectFaceOptions = (keyof Selectable<AssetFaceTable>)[];
 
@@ -96,12 +91,11 @@ export class PersonRepository {
     return Number(result.numChangedRows ?? 0);
   }
 
-  async unassignFaces({ sourceType, personType }: UnassignFacesOptions): Promise<void> {
+  async unassignFaces({ sourceType }: UnassignFacesOptions): Promise<void> {
     await this.db
       .updateTable('asset_face')
       .set({ personId: null })
       .where('asset_face.sourceType', '=', sourceType)
-      .$if(!!personType, (qb) => qb.where('asset_face.personType', '=', personType!))
       .execute();
   }
 
@@ -115,12 +109,8 @@ export class PersonRepository {
     await this.db.deleteFrom('person').where('person.id', 'in', ids).execute();
   }
 
-  async deleteFaces({ sourceType, personType }: DeleteFacesOptions): Promise<void> {
-    await this.db
-      .deleteFrom('asset_face')
-      .where('asset_face.sourceType', '=', sourceType)
-      .$if(!!personType, (qb) => qb.where('asset_face.personType', '=', personType!))
-      .execute();
+  async deleteFaces({ sourceType }: DeleteFacesOptions): Promise<void> {
+    await this.db.deleteFrom('asset_face').where('asset_face.sourceType', '=', sourceType).execute();
   }
 
   getAllFaces(options: GetAllFacesOptions = {}) {
@@ -131,7 +121,6 @@ export class PersonRepository {
       .$if(!!options.personId, (qb) => qb.where('asset_face.personId', '=', options.personId!))
       .$if(!!options.sourceType, (qb) => qb.where('asset_face.sourceType', '=', options.sourceType!))
       .$if(!!options.assetId, (qb) => qb.where('asset_face.assetId', '=', options.assetId!))
-      .$if(!!options.personType, (qb) => qb.where('asset_face.personType', '=', options.personType!))
       .where('asset_face.deletedAt', 'is', null)
       .where('asset_face.isVisible', 'is', true)
       .stream();
@@ -259,7 +248,7 @@ export class PersonRepository {
   getFaceForFacialRecognitionJob(id: string) {
     return this.db
       .selectFrom('asset_face')
-      .select(['asset_face.id', 'asset_face.personId', 'asset_face.sourceType', 'asset_face.personType'])
+      .select(['asset_face.id', 'asset_face.personId', 'asset_face.sourceType'])
       .select((eb) =>
         jsonObjectFrom(
           eb
@@ -293,15 +282,7 @@ export class PersonRepository {
         'asset.originalPath',
         'asset_exif.orientation as exifOrientation',
       ])
-      .select((eb) =>
-        eb
-          .selectFrom('asset_file')
-          .select('asset_file.path')
-          .whereRef('asset_file.assetId', '=', 'asset.id')
-          .where('asset_file.type', '=', sql.lit(AssetFileType.Preview))
-          .where('asset_file.isEdited', '=', false)
-          .as('previewPath'),
-      )
+      .select((eb) => withFilePath(eb, AssetFileType.Preview).as('previewPath'))
       .where('person.id', '=', id)
       .where('asset_face.deletedAt', 'is', null)
       .executeTakeFirst();
@@ -329,18 +310,15 @@ export class PersonRepository {
   @GenerateSql({ params: [DummyValue.UUID, DummyValue.STRING, { withHidden: true }] })
   getByName(userId: string, personName: string, { withHidden }: PersonNameSearchOptions) {
     return this.db
-      .selectFrom('person')
-      .selectAll('person')
-      .where((eb) =>
-        eb.and([
-          eb('person.ownerId', '=', userId),
-          eb.or([
-            eb(eb.fn('lower', ['person.name']), 'like', `${personName.toLowerCase()}%`),
-            eb(eb.fn('lower', ['person.name']), 'like', `% ${personName.toLowerCase()}%`),
-          ]),
-        ]),
+      .with('similarity_threshold', (db) =>
+        db.selectNoFrom(sql`set_config('pg_trgm.word_similarity_threshold', '0.5', true)`.as('thresh')),
       )
-      .limit(1000)
+      .selectFrom(['similarity_threshold', 'person'])
+      .selectAll('person')
+      .where('person.ownerId', '=', userId)
+      .where(() => sql`f_unaccent("person"."name") %> f_unaccent(${personName})`)
+      .orderBy(sql`f_unaccent("person"."name") <->>> f_unaccent(${personName})`)
+      .limit(100)
       .$if(!withHidden, (qb) => qb.where('person.isHidden', '=', false))
       .execute();
   }
@@ -440,7 +418,7 @@ export class PersonRepository {
       (query as any) = query.with('added_embeddings', (db) => db.insertInto('face_search').values(embeddingsToAdd));
     }
 
-    await query.selectFrom(sql`(select 1)`.as('dummy')).execute();
+    await query.selectFrom(dummy).execute();
   }
 
   async update(person: Updateable<PersonTable> & { id: string }) {
@@ -471,7 +449,6 @@ export class PersonRepository {
               isHidden: eb.ref('excluded.isHidden'),
               isFavorite: eb.ref('excluded.isFavorite'),
               color: eb.ref('excluded.color'),
-              type: eb.ref('excluded.type'),
             },
             people[0],
           ),

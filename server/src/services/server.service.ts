@@ -23,7 +23,6 @@ import {
   isDuplicateDetectionEnabled,
   isFacialRecognitionEnabled,
   isOcrEnabled,
-  isPetRecognitionEnabled,
   isSmartSearchEnabled,
 } from 'src/utils/misc';
 
@@ -94,7 +93,6 @@ export class ServerService extends BaseService {
     return {
       smartSearch: isSmartSearchEnabled(machineLearning),
       facialRecognition: isFacialRecognitionEnabled(machineLearning),
-      petRecognition: isPetRecognitionEnabled(machineLearning),
       duplicateDetection: isDuplicateDetectionEnabled(machineLearning),
       map: map.enabled,
       reverseGeocoding: reverseGeocoding.enabled,
@@ -109,11 +107,6 @@ export class ServerService extends BaseService {
       configFile: !!configFile,
       email: notifications.smtp.enabled,
     };
-  }
-
-  async getTheme() {
-    const { theme } = await this.getConfig({ withCache: false });
-    return theme;
   }
 
   async getSystemConfig(): Promise<ServerConfigDto> {
@@ -140,6 +133,12 @@ export class ServerService extends BaseService {
   async getStatistics(): Promise<ServerStatsResponseDto> {
     const userStats: UserStatsQueryResponse[] = await this.userRepository.getUserStats();
     const serverStats = new ServerStatsResponseDto();
+    serverStats.photos ??= 0;
+    serverStats.videos ??= 0;
+    serverStats.usage ??= 0;
+    serverStats.usagePhotos ??= 0;
+    serverStats.usageVideos ??= 0;
+    serverStats.usageByUser ??= [];
 
     for (const user of userStats) {
       const usage = new UsageByUserDto();

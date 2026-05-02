@@ -447,3 +447,7 @@ export const updateLockedColumns = <T extends Record<string, unknown> & { locked
 };
 
 export const dummy = sql`(select 1)`.as('dummy');
+
+export const asUuid = (id: string) => sql<string>`${id}::uuid`;
+export const anyUuid = (ids: string[]) => sql<string>`ANY(${sql.val(ids)}::uuid[])`;
+export const dummy = sql`(select 1)`.as('dummy');

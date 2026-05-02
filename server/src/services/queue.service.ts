@@ -1,5 +1,4 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { ClassConstructor } from 'class-transformer';
 import { SystemConfig } from 'src/config';
 import { OnEvent } from 'src/decorators';
 import { AuthDto } from 'src/dtos/auth.dto';
@@ -39,7 +38,7 @@ const asNightlyTasksCron = (config: SystemConfig) => {
 
 @Injectable()
 export class QueueService extends BaseService {
-  private services: ClassConstructor<unknown>[] = [];
+  private services: (new (...args: any[]) => unknown)[] = [];
   private nightlyJobsLock = false;
 
   @OnEvent({ name: 'ConfigInit' })
@@ -96,7 +95,7 @@ export class QueueService extends BaseService {
     }
   }
 
-  setServices(services: ClassConstructor<unknown>[]) {
+  setServices(services: (new (...args: any[]) => unknown)[]) {
     this.services = services;
   }
 
@@ -228,16 +227,8 @@ export class QueueService extends BaseService {
         return this.jobRepository.queue({ name: JobName.AssetDetectFacesQueueAll, data: { force } });
       }
 
-      case QueueName.PetDetection: {
-        return this.jobRepository.queue({ name: JobName.AssetDetectPetsQueueAll, data: { force } });
-      }
-
       case QueueName.FacialRecognition: {
         return this.jobRepository.queue({ name: JobName.FacialRecognitionQueueAll, data: { force } });
-      }
-
-      case QueueName.PetRecognition: {
-        return this.jobRepository.queue({ name: JobName.PetRecognitionQueueAll, data: { force } });
       }
 
       case QueueName.Library: {
@@ -261,7 +252,6 @@ export class QueueService extends BaseService {
   private isConcurrentQueue(name: QueueName): name is ConcurrentQueueName {
     return ![
       QueueName.FacialRecognition,
-      QueueName.PetRecognition,
       QueueName.StorageTemplateMigration,
       QueueName.DuplicateDetection,
       QueueName.BackupDatabase,
@@ -280,7 +270,6 @@ export class QueueService extends BaseService {
         { name: JobName.MemoryCleanup },
         { name: JobName.SessionCleanup },
         { name: JobName.AuditTableCleanup },
-        { name: JobName.AuditLogCleanup },
       );
     }
 
@@ -297,10 +286,7 @@ export class QueueService extends BaseService {
     }
 
     if (config.nightlyTasks.clusterNewFaces) {
-      jobs.push(
-        { name: JobName.FacialRecognitionQueueAll, data: { force: false, nightly: true } },
-        { name: JobName.PetRecognitionQueueAll, data: { force: false, nightly: true } },
-      );
+      jobs.push({ name: JobName.FacialRecognitionQueueAll, data: { force: false, nightly: true } });
     }
 
     await this.jobRepository.queueAll(jobs);

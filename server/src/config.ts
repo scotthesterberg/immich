@@ -59,14 +59,6 @@ export type SystemConfig = {
       timeout: number;
       interval: number;
     };
-    petRecognition: {
-      enabled: boolean;
-      detectionModelName: string;
-      recognitionModelName: string;
-      minScore: number;
-      minFaces: number;
-      maxDistance: number;
-    };
     clip: {
       enabled: boolean;
       modelName: string;
@@ -238,7 +230,6 @@ export const defaults = Object.freeze<SystemConfig>({
     [QueueName.SmartSearch]: { concurrency: 2 },
     [QueueName.MetadataExtraction]: { concurrency: 5 },
     [QueueName.FaceDetection]: { concurrency: 2 },
-    [QueueName.PetDetection]: { concurrency: 2 },
     [QueueName.Search]: { concurrency: 5 },
     [QueueName.Sidecar]: { concurrency: 5 },
     [QueueName.Library]: { concurrency: 5 },
@@ -259,16 +250,8 @@ export const defaults = Object.freeze<SystemConfig>({
     urls: [process.env.IMMICH_MACHINE_LEARNING_URL || 'http://immich-machine-learning:3003'],
     availabilityChecks: {
       enabled: true,
-      timeout: Number(process.env.IMMICH_MACHINE_LEARNING_PING_TIMEOUT) || 2000,
+      timeout: 2000,
       interval: 30_000,
-    },
-    petRecognition: {
-      enabled: process.env.IMMICH_PET_RECOGNITION_ENABLED === 'true',
-      detectionModelName: process.env.IMMICH_PET_DETECTION_MODEL_NAME || 'pet-recognition',
-      recognitionModelName: process.env.IMMICH_PET_RECOGNITION_MODEL_NAME || 'pet-recognition',
-      minScore: 0.5,
-      maxDistance: 0.5,
-      minFaces: 3,
     },
     clip: {
       enabled: true,
