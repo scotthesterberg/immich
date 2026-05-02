@@ -211,12 +211,14 @@ const mapStack = (entity: { stack?: Stack | null }) => {
   };
 };
 
-export function mapAsset(entity: MaybeDehydrated<MapAsset>, options: AssetMapOptions = {}): AssetResponseDto {
+export function mapAsset(entity: any, options: AssetMapOptions = {}): AssetResponseDto {
   const { stripMetadata = false, withStack = false } = options;
 
   if (stripMetadata) {
     const sanitizedAssetResponse: SanitizedAssetResponseDto = {
       id: entity.id,
+    deviceAssetId: (entity as any).deviceAssetId,
+    deviceId: (entity as any).deviceId,
       type: entity.type,
       originalMimeType: mimeTypes.lookup(entity.originalFileName),
       thumbhash: entity.thumbhash ? hexOrBufferToBase64(entity.thumbhash) : null,
@@ -227,13 +229,15 @@ export function mapAsset(entity: MaybeDehydrated<MapAsset>, options: AssetMapOpt
       width: entity.width,
       height: entity.height,
     };
-    return sanitizedAssetResponse as AssetResponseDto;
+    return sanitizedAssetResponse as any;
   }
 
   const assetDimensions = entity.exifInfo ? getDimensions(entity.exifInfo) : undefined;
 
   return {
     id: entity.id,
+    deviceAssetId: (entity as any).deviceAssetId,
+    deviceId: (entity as any).deviceId,
     createdAt: asDateString(entity.createdAt),
     ownerId: entity.ownerId,
     owner: entity.owner ? mapUser(entity.owner) : undefined,
@@ -260,8 +264,6 @@ export function mapAsset(entity: MaybeDehydrated<MapAsset>, options: AssetMapOpt
       ?.filter((face) => !face.person)
       .map((face: any) => mapFacesWithoutPerson(face, entity.edits, assetDimensions)),
     checksum: hexOrBufferToBase64(entity.checksum)!,
-    deviceAssetId: (entity as any).deviceAssetId,
-    deviceId: (entity as any).deviceId,
     stack: withStack ? mapStack(entity) : undefined,
     isOffline: entity.isOffline,
     hasMetadata: true,

@@ -12,9 +12,9 @@ import {
   UpdateDateColumn,
 } from '@immich/sql-tools';
 import { UpdatedAtTrigger, UpdateIdColumn } from 'src/decorators';
-import { PersonType } from 'src/enum';
-import { person_type_enum } from 'src/schema/enums';
 import { person_delete_audit } from 'src/schema/functions';
+import { person_type_enum } from 'src/schema/enums';
+import { PersonType } from 'src/enum';
 import { AssetFaceTable } from 'src/schema/tables/asset-face.table';
 import { UserTable } from 'src/schema/tables/user.table';
 

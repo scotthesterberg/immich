@@ -386,6 +386,6 @@ export class SystemConfigSmtpDto extends createZodDto(SystemConfigSmtpSchema) {}
 export class SystemConfigTemplateStorageOptionDto extends createZodDto(SystemConfigTemplateStorageOptionSchema) {}
 export class SystemConfigDto extends createZodDto(SystemConfigSchema) {}
 
-export function mapConfig(config: SystemConfig): SystemConfigDto {
+export function mapConfig(config: SystemConfig): any {
   return config;
 }

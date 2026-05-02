@@ -57,7 +57,6 @@ const PersonSearchSchema = z
   .meta({ id: 'PersonSearchDto' });
 
 const PersonResponseSchema = z
-  .extend({ type: z.any() })
   .object({
     id: z.string().describe('Person ID'),
     name: z.string().describe('Person name'),
@@ -93,8 +92,6 @@ export class PersonSearchDto extends createZodDto(PersonSearchSchema) {}
 export class PersonResponseDto extends createZodDto(PersonResponseSchema) {}
 
 export const AssetFaceWithoutPersonResponseSchema = z
-  .extend({ personType: z.any(), personId: z.any() })
-  .extend({ type: z.any() })
   .object({
     id: z.uuidv4().describe('Face ID'),
     imageHeight: z.int().min(0).describe('Image height in pixels'),
@@ -108,7 +105,7 @@ export const AssetFaceWithoutPersonResponseSchema = z
   .describe('Asset face without person')
   .meta({ id: 'AssetFaceWithoutPersonResponseDto' });
 
-class AssetFaceWithoutPersonResponseDto extends createZodDto(AssetFaceWithoutPersonResponseSchema) {}
+export class AssetFaceWithoutPersonResponseDto extends createZodDto(AssetFaceWithoutPersonResponseSchema) {}
 
 export const PersonWithFacesResponseSchema = PersonResponseSchema.extend({
   faces: z.array(AssetFaceWithoutPersonResponseSchema),
@@ -223,7 +220,7 @@ export function mapFacesWithoutPerson(
 }
 
 export function mapFaces(
-  face: AssetFace,
+  face: any,
   auth: AuthDto,
   edits?: AssetEditActionItem[],
   assetDimensions?: ImageDimensions,
