@@ -8,8 +8,6 @@ export class AssetJobStatusTable {
 
   @Column({ type: 'timestamp with time zone', nullable: true })
   facesRecognizedAt!: Timestamp | null;
-  @Column({ type: 'timestamp with time zone', nullable: true })
-  petsRecognizedAt!: Timestamp | null;
 
   @Column({ type: 'timestamp with time zone', nullable: true })
   metadataExtractedAt!: Timestamp | null;

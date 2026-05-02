@@ -56,5 +56,5 @@ export const OcrConfigSchema = ModelConfigSchema.extend({
 
 export class CLIPConfig extends createZodDto(CLIPConfigSchema) {}
 
-export const PetRecognitionConfigSchema = any;
+export const PetRecognitionConfigSchema = z.any();
 export class PetRecognitionConfig extends createZodDto(PetRecognitionConfigSchema) {}

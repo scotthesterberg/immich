@@ -328,6 +328,8 @@ const userWithPrefixColumns = [
 export const columns = {
   asset: [
     'asset.id',
+    'asset.deviceAssetId',
+    'asset.deviceId',
     'asset.checksum',
     'asset.checksumAlgorithm',
     'asset.fileCreatedAt',
@@ -378,6 +380,8 @@ export const columns = {
   notification: ['id', 'createdAt', 'level', 'type', 'title', 'description', 'data', 'readAt'],
   syncAsset: [
     'asset.id',
+    'asset.deviceAssetId',
+    'asset.deviceId',
     'asset.ownerId',
     'asset.originalFileName',
     'asset.thumbhash',
