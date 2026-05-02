@@ -191,6 +191,7 @@ export function mapPerson(person: MaybeDehydrated<Person>): PersonResponseDto {
     color: person.color ?? undefined,
     updatedAt: asDateString(person.updatedAt),
     type: (person as any).type,
+    type: (person as any).type,
   };
 }
 
@@ -220,7 +221,7 @@ export function mapFacesWithoutPerson(
 }
 
 export function mapFaces(
-  face: any,
+  face: AssetFace,
   auth: AuthDto,
   edits?: AssetEditActionItem[],
   assetDimensions?: ImageDimensions,

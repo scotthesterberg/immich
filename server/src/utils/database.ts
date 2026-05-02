@@ -1,4 +1,4 @@
-import { createPostgres, DatabaseConnectionParams, DatabasePostgresOptions } from '@immich/sql-tools';
+import { createPostgres, DatabaseConnectionParams } from '@immich/sql-tools';
 import {
   AliasedRawBuilder,
   DeduplicateJoinsPlugin,
@@ -8,164 +8,436 @@ import {
   KyselyConfig,
   NotNull,
   Selectable,
+  SelectQueryBuilder,
+  ShallowDehydrateObject,
   sql,
 } from 'kysely';
+import { PostgresJSDialect } from 'kysely-postgres-js';
 import { jsonArrayFrom, jsonObjectFrom } from 'kysely/helpers/postgres';
-import { AssetFileType, AssetStatus, AssetVisibility } from 'src/enum';
-import { DB } from 'src/schema';
+import { Notice, PostgresError } from 'postgres';
 import { columns, lockableProperties, LockableProperty, Person } from 'src/database';
-export { columns } from 'src/database';
+import { AssetEditActionItem } from 'src/dtos/editing.dto';
+import { AssetFileType, AssetVisibility, DatabaseExtension } from 'src/enum';
+import { AssetSearchBuilderOptions } from 'src/repositories/search.repository';
+import { DB } from 'src/schema';
+import { AssetExifTable } from 'src/schema/tables/asset-exif.table';
+import { VectorExtension } from 'src/types';
 
-export const createDatabase = (params: DatabaseConnectionParams, config?: KyselyConfig): Kysely<DB> => {
-  const { pool, adapter, introspector, queryCompiler } = createPostgres(params as DatabasePostgresOptions) as any;
-  return new Kysely<DB>({
-    dialect: {
-      createAdapter: () => adapter,
-      createIntrospector: () => introspector,
-      createPool: () => pool,
-      createDriver: (config: any) => adapter.createDriver(config),
-      createQueryCompiler: () => queryCompiler,
-    } as any,
-    plugins: [new DeduplicateJoinsPlugin()],
-    ...config,
-  });
-};
-
-export const getKyselyConfig = (params: DatabaseConnectionParams): KyselyConfig => {
-  const { pool, adapter, introspector, queryCompiler } = createPostgres(params as DatabasePostgresOptions) as any;
+export const getKyselyConfig = (connection: DatabaseConnectionParams): KyselyConfig => {
   return {
-    dialect: {
-      createAdapter: () => adapter,
-      createIntrospector: () => introspector,
-      createPool: () => pool,
-      createDriver: (config: any) => adapter.createDriver(config),
-      createQueryCompiler: () => queryCompiler,
-    } as any,
-    plugins: [new DeduplicateJoinsPlugin()],
+    dialect: new PostgresJSDialect({
+      postgres: createPostgres({
+        connection,
+        onNotice: (notice: Notice) => {
+          if (notice['severity'] !== 'NOTICE') {
+            console.warn('Postgres notice:', notice);
+          }
+        },
+      }),
+    }),
+    log(event) {
+      if (event.level === 'error') {
+        if (isAssetChecksumConstraint(event.error)) {
+          return;
+        }
+
+        console.error('Query failed :', {
+          durationMs: event.queryDurationMillis,
+          error: event.error,
+          sql: event.query.sql,
+          params: event.query.parameters,
+        });
+      }
+    },
   };
 };
 
-export const asUuid = (id: string | Expression<any>) => sql<string>\`\${id}::uuid\`;
-export const anyUuid = (ids: string[]) => sql<string>\`ANY(\${sql.val(ids)}::uuid[])\`;
+export const asUuid = (id: string | Expression<string>) => sql<string>`${id}::uuid`;
 
-export const searchAssetBuilder = (db: Kysely<DB>, options: { id?: string; withDeleted?: boolean; ownerId?: string; livePhotoVideoId?: string; libraryId?: string; userIds?: string[]; personIds?: string[]; albumIds?: string[]; tagIds?: string[] } = {}) => {
-  let query = db.selectFrom('asset');
+export const anyUuid = (ids: string[]) => sql<string>`any(${`{${ids}}`}::uuid[])`;
 
-  if (options.id) {
-    query = query.where('asset.id', '=', asUuid(options.id) as any);
-  }
+export const asVector = (embedding: number[]) => sql<string>`${`[${embedding}]`}::vector`;
 
-  if (!options.withDeleted) {
-    query = query.where('asset.deletedAt', 'is', null);
-  }
+export const unnest = (array: string[]) => sql<Record<string, string>>`unnest(array[${sql.join(array)}]::text[])`;
 
-  if (options.ownerId) {
-    query = query.where('asset.ownerId', '=', asUuid(options.ownerId) as any);
-  }
-  
-  if (options.libraryId) {
-    query = query.where('asset.libraryId', '=', asUuid(options.libraryId) as any);
+export const removeUndefinedKeys = <T extends object>(update: T, template: unknown) => {
+  for (const key in update) {
+    if ((template as T)[key] === undefined) {
+      delete update[key];
+    }
   }
 
-  if (options.livePhotoVideoId) {
-    query = query.where('asset.livePhotoVideoId', '=', asUuid(options.livePhotoVideoId) as any);
-  }
-  
-  if (options.userIds) {
-    query = query.where('asset.ownerId', '=', anyUuid(options.userIds) as any);
-  }
-  
-  if (options.personIds) {
-    query = query.innerJoin('asset_face', 'asset_face.assetId', 'asset.id').where('asset_face.personId', '=', anyUuid(options.personIds) as any);
-  }
-  
-  if (options.albumIds) {
-    query = query.innerJoin('album_asset', 'album_asset.assetId', 'asset.id').where('album_asset.albumId', '=', anyUuid(options.albumIds) as any);
-  }
-  
-  if (options.tagIds) {
-    query = query.innerJoin('tag_asset', 'tag_asset.assetId', 'asset.id').where('tag_asset.tagId', '=', anyUuid(options.tagIds) as any);
-  }
-
-  return query;
+  return update;
 };
 
-export const withExif = <O>(qb: any) => {
-  return qb.leftJoin('asset_exif', 'asset_exif.assetId', 'asset.id');
+export const ASSET_CHECKSUM_CONSTRAINT = 'UQ_assets_owner_checksum';
+
+export const isAssetChecksumConstraint = (error: unknown) => {
+  return (error as PostgresError)?.constraint_name === 'UQ_assets_owner_checksum';
 };
 
-export const withExifInner = <O>(qb: any) => {
-  return qb.innerJoin('asset_exif', 'asset_exif.assetId', 'asset.id');
-};
+export function withDefaultVisibility<O>(qb: SelectQueryBuilder<DB, 'asset', O>) {
+  return qb.where('asset.visibility', 'in', [sql.lit(AssetVisibility.Archive), sql.lit(AssetVisibility.Timeline)]);
+}
 
-export const withDefaultVisibility = <O>(qb: any) => {
-  return qb.where('asset.visibility', '!=', AssetVisibility.Hidden);
-};
+// TODO come up with a better query that only selects the fields we need
+export function withExif<O>(qb: SelectQueryBuilder<DB, 'asset', O>) {
+  return qb
+    .leftJoin('asset_exif', 'asset.id', 'asset_exif.assetId')
+    .select((eb) =>
+      eb.fn
+        .toJson(eb.table('asset_exif'))
+        .$castTo<ShallowDehydrateObject<Selectable<AssetExifTable>> | null>()
+        .as('exifInfo'),
+    );
+}
 
-export const withFilePath = (eb: ExpressionBuilder<DB, any>, type: AssetFileType) => {
-  return eb
-    .selectFrom('asset_file')
-    .select('path')
-    .whereRef('asset_file.assetId', '=', 'asset.id')
-    .where('asset_file.type', '=', type)
-    .limit(1);
-};
+export function withExifInner<O>(qb: SelectQueryBuilder<DB, 'asset', O>) {
+  return qb
+    .innerJoin('asset_exif', 'asset.id', 'asset_exif.assetId')
+    .select((eb) => eb.fn.toJson(eb.table('asset_exif')).as('exifInfo'))
+    .$narrowType<{ exifInfo: NotNull }>();
+}
 
-export const withFiles = (eb: ExpressionBuilder<DB, any>) => {
-  return jsonArrayFrom(
-    eb
-      .selectFrom('asset_file')
-      .select(columns.asset_file as any)
-      .whereRef('asset_file.assetId', '=', 'asset.id')
-      .orderBy('asset_file.type', 'asc'),
-  ).as('files');
-};
+export function withSmartSearch<O>(qb: SelectQueryBuilder<DB, 'asset', O>) {
+  return qb
+    .leftJoin('smart_search', 'asset.id', 'smart_search.assetId')
+    .select((eb) => jsonObjectFrom(eb.table('smart_search')).as('smartSearch'));
+}
 
-export const withTags = (eb: ExpressionBuilder<DB, any>) => {
-  return jsonArrayFrom(
-    eb
-      .selectFrom('tag_asset')
-      .innerJoin('tag', 'tag.id', 'tag_asset.tagId')
-      .select(columns.tag as any)
-      .whereRef('tag_asset.assetId', '=', 'asset.id')
-      .orderBy('tag.value', 'asc'),
-  ).as('tags');
-};
-
-export const withFaces = (eb: ExpressionBuilder<DB, any>) => {
+export function withFaces(eb: ExpressionBuilder<DB, 'asset'>, withHidden?: boolean, withDeletedFace?: boolean) {
   return jsonArrayFrom(
     eb
       .selectFrom('asset_face')
-      .selectAll()
-      .select((eb) =>
-        jsonObjectFrom(
-          eb
-            .selectFrom('person')
-            .selectAll()
-            .whereRef('person.id', '=', 'asset_face.personId')
-            .where('person.isHidden', '=', false),
-        ).as('person'),
-      )
+      .selectAll('asset_face')
       .whereRef('asset_face.assetId', '=', 'asset.id')
-      .where('asset_face.deletedAt', 'is', null)
-      .where('asset_face.isVisible', '=', true),
+      .$if(!withDeletedFace, (qb) => qb.where('asset_face.deletedAt', 'is', null))
+      .$if(!withHidden, (qb) => qb.where('asset_face.isVisible', '=', true)),
   ).as('faces');
-};
+}
 
-export const withOwner = (eb: ExpressionBuilder<DB, any>) => {
-  return jsonObjectFrom(eb.selectFrom('user').select(columns.user as any).whereRef('user.id', '=', 'asset.ownerId')).as(
+export function withFiles(eb: ExpressionBuilder<DB, 'asset'>, type?: AssetFileType) {
+  return jsonArrayFrom(
+    eb
+      .selectFrom('asset_file')
+      .select(columns.assetFiles)
+      .whereRef('asset_file.assetId', '=', 'asset.id')
+      .$if(!!type, (qb) => qb.where('asset_file.type', '=', type!)),
+  ).as('files');
+}
+
+export function withFilePath(eb: ExpressionBuilder<DB, 'asset'>, type: AssetFileType, isEdited = false) {
+  return eb
+    .selectFrom('asset_file')
+    .select('asset_file.path')
+    .whereRef('asset_file.assetId', '=', 'asset.id')
+    .where('asset_file.type', '=', sql.lit(type))
+    .where('asset_file.isEdited', '=', sql.lit(isEdited));
+}
+
+export function withFacesAndPeople(
+  eb: ExpressionBuilder<DB, 'asset'>,
+  withHidden?: boolean,
+  withDeletedFace?: boolean,
+) {
+  return jsonArrayFrom(
+    eb
+      .selectFrom('asset_face')
+      .leftJoinLateral(
+        (eb) =>
+          eb.selectFrom('person').selectAll('person').whereRef('asset_face.personId', '=', 'person.id').as('person'),
+        (join) => join.onTrue(),
+      )
+      .selectAll('asset_face')
+      .select((eb) => eb.table('person').$castTo<ShallowDehydrateObject<Person>>().as('person'))
+      .whereRef('asset_face.assetId', '=', 'asset.id')
+      .$if(!withDeletedFace, (qb) => qb.where('asset_face.deletedAt', 'is', null))
+      .$if(!withHidden, (qb) => qb.where('asset_face.isVisible', 'is', true)),
+  ).as('faces');
+}
+
+export function hasPeople<O>(qb: SelectQueryBuilder<DB, 'asset', O>, personIds: string[]) {
+  return qb.innerJoin(
+    (eb) =>
+      eb
+        .selectFrom('asset_face')
+        .select('assetId')
+        .where('personId', '=', anyUuid(personIds!))
+        .where('deletedAt', 'is', null)
+        .where('isVisible', 'is', true)
+        .groupBy('assetId')
+        .having((eb) => eb.fn.count('personId').distinct(), '=', personIds.length)
+        .as('has_people'),
+    (join) => join.onRef('has_people.assetId', '=', 'asset.id'),
+  );
+}
+
+export function inAlbums<O>(qb: SelectQueryBuilder<DB, 'asset', O>, albumIds: string[]) {
+  return qb.innerJoin(
+    (eb) =>
+      eb
+        .selectFrom('album_asset')
+        .select('assetId')
+        .where('albumId', '=', anyUuid(albumIds!))
+        .groupBy('assetId')
+        .having((eb) => eb.fn.count('albumId').distinct(), '=', albumIds.length)
+        .as('has_album'),
+    (join) => join.onRef('has_album.assetId', '=', 'asset.id'),
+  );
+}
+
+export function hasTags<O>(qb: SelectQueryBuilder<DB, 'asset', O>, tagIds: string[]) {
+  return qb.innerJoin(
+    (eb) =>
+      eb
+        .selectFrom('tag_asset')
+        .select('assetId')
+        .innerJoin('tag_closure', 'tag_asset.tagId', 'tag_closure.id_descendant')
+        .where('tag_closure.id_ancestor', '=', anyUuid(tagIds))
+        .groupBy('assetId')
+        .having((eb) => eb.fn.count('tag_closure.id_ancestor').distinct(), '>=', tagIds.length)
+        .as('has_tags'),
+    (join) => join.onRef('has_tags.assetId', '=', 'asset.id'),
+  );
+}
+
+export function withOwner(eb: ExpressionBuilder<DB, 'asset'>) {
+  return jsonObjectFrom(eb.selectFrom('user').select(columns.user).whereRef('user.id', '=', 'asset.ownerId')).as(
     'owner',
   );
-};
+}
 
-export const removeUndefinedKeys = <T extends object>(target: T, source: Partial<T>): T => {
-  for (const key in source) {
-    if (source[key] !== undefined) {
-      target[key] = source[key] as T[Extract<keyof T, string>];
+export function withLibrary(eb: ExpressionBuilder<DB, 'asset'>) {
+  return jsonObjectFrom(
+    eb.selectFrom('library').selectAll('library').whereRef('library.id', '=', 'asset.libraryId'),
+  ).as('library');
+}
+
+export function withTags(eb: ExpressionBuilder<DB, 'asset'>) {
+  return jsonArrayFrom(
+    eb
+      .selectFrom('tag')
+      .select(columns.tag)
+      .innerJoin('tag_asset', 'tag.id', 'tag_asset.tagId')
+      .whereRef('asset.id', '=', 'tag_asset.assetId'),
+  ).as('tags');
+}
+
+export function truncatedDate<O>() {
+  return sql<O>`date_trunc(${sql.lit('MONTH')}, "localDateTime" AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'`;
+}
+
+export function withTagId<O>(qb: SelectQueryBuilder<DB, 'asset', O>, tagId: string) {
+  return qb.where((eb) =>
+    eb.exists(
+      eb
+        .selectFrom('tag_closure')
+        .innerJoin('tag_asset', 'tag_asset.tagId', 'tag_closure.id_descendant')
+        .whereRef('tag_asset.assetId', '=', 'asset.id')
+        .where('tag_closure.id_ancestor', '=', tagId),
+    ),
+  );
+}
+
+const isCJK = (c: number): boolean =>
+  (c >= 0x4e_00 && c <= 0x9f_ff) ||
+  (c >= 0xac_00 && c <= 0xd7_af) ||
+  (c >= 0x30_40 && c <= 0x30_9f) ||
+  (c >= 0x30_a0 && c <= 0x30_ff) ||
+  (c >= 0x34_00 && c <= 0x4d_bf);
+
+export const tokenizeForSearch = (text: string): string[] => {
+  /* eslint-disable unicorn/prefer-code-point */
+  const tokens: string[] = [];
+  let i = 0;
+  while (i < text.length) {
+    const c = text.charCodeAt(i);
+    if (c <= 32) {
+      i++;
+      continue;
+    }
+
+    const start = i;
+    if (isCJK(c)) {
+      while (i < text.length && isCJK(text.charCodeAt(i))) {
+        i++;
+      }
+      if (i - start === 1) {
+        tokens.push(text[start]);
+      } else {
+        for (let k = start; k < i - 1; k++) {
+          tokens.push(text[k] + text[k + 1]);
+        }
+      }
+    } else {
+      while (i < text.length && text.charCodeAt(i) > 32 && !isCJK(text.charCodeAt(i))) {
+        i++;
+      }
+      tokens.push(text.slice(start, i));
     }
   }
-  return target;
+  return tokens;
 };
+
+// needed to properly type the return with the EditActionItem discriminated union type
+type AliasedEditActions = AliasedRawBuilder<AssetEditActionItem[], 'edits'>;
+export function withEdits(eb: ExpressionBuilder<DB, 'asset'>): AliasedEditActions {
+  return jsonArrayFrom(
+    eb
+      .selectFrom('asset_edit')
+      .select(['asset_edit.action', 'asset_edit.parameters'])
+      .whereRef('asset_edit.assetId', '=', 'asset.id'),
+  ).as('edits') as AliasedEditActions;
+}
+
+const joinDeduplicationPlugin = new DeduplicateJoinsPlugin();
+/** TODO: This should only be used for search-related queries, not as a general purpose query builder */
+
+export function searchAssetBuilder(kysely: Kysely<DB>, options: AssetSearchBuilderOptions) {
+  options.withDeleted ||= !!(options.trashedAfter || options.trashedBefore || options.isOffline);
+  const visibility = options.visibility == null ? AssetVisibility.Timeline : options.visibility;
+
+  return kysely
+    .withPlugin(joinDeduplicationPlugin)
+    .selectFrom('asset')
+    .where('asset.visibility', '=', visibility)
+    .$if(!!options.albumIds && options.albumIds.length > 0, (qb) => inAlbums(qb, options.albumIds!))
+    .$if(!!options.tagIds && options.tagIds.length > 0, (qb) => hasTags(qb, options.tagIds!))
+    .$if(options.tagIds === null, (qb) =>
+      qb.where((eb) => eb.not(eb.exists((eb) => eb.selectFrom('tag_asset').whereRef('assetId', '=', 'asset.id')))),
+    )
+    .$if(!!options.personIds && options.personIds.length > 0, (qb) => hasPeople(qb, options.personIds!))
+    .$if(!!options.createdBefore, (qb) => qb.where('asset.createdAt', '<=', options.createdBefore!))
+    .$if(!!options.createdAfter, (qb) => qb.where('asset.createdAt', '>=', options.createdAfter!))
+    .$if(!!options.updatedBefore, (qb) => qb.where('asset.updatedAt', '<=', options.updatedBefore!))
+    .$if(!!options.updatedAfter, (qb) => qb.where('asset.updatedAt', '>=', options.updatedAfter!))
+    .$if(!!options.trashedBefore, (qb) => qb.where('asset.deletedAt', '<=', options.trashedBefore!))
+    .$if(!!options.trashedAfter, (qb) => qb.where('asset.deletedAt', '>=', options.trashedAfter!))
+    .$if(!!options.takenBefore, (qb) => qb.where('asset.fileCreatedAt', '<=', options.takenBefore!))
+    .$if(!!options.takenAfter, (qb) => qb.where('asset.fileCreatedAt', '>=', options.takenAfter!))
+    .$if(options.city !== undefined, (qb) =>
+      qb
+        .innerJoin('asset_exif', 'asset.id', 'asset_exif.assetId')
+        .where('asset_exif.city', options.city === null ? 'is' : '=', options.city!),
+    )
+    .$if(options.state !== undefined, (qb) =>
+      qb
+        .innerJoin('asset_exif', 'asset.id', 'asset_exif.assetId')
+        .where('asset_exif.state', options.state === null ? 'is' : '=', options.state!),
+    )
+    .$if(options.country !== undefined, (qb) =>
+      qb
+        .innerJoin('asset_exif', 'asset.id', 'asset_exif.assetId')
+        .where('asset_exif.country', options.country === null ? 'is' : '=', options.country!),
+    )
+    .$if(options.make !== undefined, (qb) =>
+      qb
+        .innerJoin('asset_exif', 'asset.id', 'asset_exif.assetId')
+        .where('asset_exif.make', options.make === null ? 'is' : '=', options.make!),
+    )
+    .$if(options.model !== undefined, (qb) =>
+      qb
+        .innerJoin('asset_exif', 'asset.id', 'asset_exif.assetId')
+        .where('asset_exif.model', options.model === null ? 'is' : '=', options.model!),
+    )
+    .$if(options.lensModel !== undefined, (qb) =>
+      qb
+        .innerJoin('asset_exif', 'asset.id', 'asset_exif.assetId')
+        .where('asset_exif.lensModel', options.lensModel === null ? 'is' : '=', options.lensModel!),
+    )
+    .$if(options.rating !== undefined, (qb) =>
+      qb
+        .innerJoin('asset_exif', 'asset.id', 'asset_exif.assetId')
+        .where('asset_exif.rating', options.rating === null ? 'is' : '=', options.rating!),
+    )
+    .$if(!!options.checksum, (qb) => qb.where('asset.checksum', '=', options.checksum!))
+    .$if(!!options.id, (qb) => qb.where('asset.id', '=', asUuid(options.id!)))
+    .$if(!!options.libraryId, (qb) => qb.where('asset.libraryId', '=', asUuid(options.libraryId!)))
+    .$if(!!options.userIds, (qb) => qb.where('asset.ownerId', '=', anyUuid(options.userIds!)))
+    .$if(!!options.encodedVideoPath, (qb) =>
+      qb
+        .innerJoin('asset_file', (join) =>
+          join
+            .onRef('asset.id', '=', 'asset_file.assetId')
+            .on('asset_file.type', '=', AssetFileType.EncodedVideo)
+            .on('asset_file.isEdited', '=', false),
+        )
+        .where('asset_file.path', '=', options.encodedVideoPath!),
+    )
+    .$if(!!options.originalPath, (qb) =>
+      qb.where(sql`f_unaccent(asset."originalPath")`, 'ilike', sql`'%' || f_unaccent(${options.originalPath}) || '%'`),
+    )
+    .$if(!!options.originalFileName, (qb) =>
+      qb.where(
+        sql`f_unaccent(asset."originalFileName")`,
+        'ilike',
+        sql`'%' || f_unaccent(${options.originalFileName}) || '%'`,
+      ),
+    )
+    .$if(!!options.description, (qb) =>
+      qb
+        .innerJoin('asset_exif', 'asset.id', 'asset_exif.assetId')
+        .where(sql`f_unaccent(asset_exif.description)`, 'ilike', sql`'%' || f_unaccent(${options.description}) || '%'`),
+    )
+    .$if(!!options.ocr, (qb) =>
+      qb
+        .innerJoin('ocr_search', 'asset.id', 'ocr_search.assetId')
+        .where(() => sql`f_unaccent(ocr_search.text) %>> f_unaccent(${tokenizeForSearch(options.ocr!).join(' ')})`),
+    )
+    .$if(!!options.type, (qb) => qb.where('asset.type', '=', options.type!))
+    .$if(options.isFavorite !== undefined, (qb) => qb.where('asset.isFavorite', '=', options.isFavorite!))
+    .$if(options.isOffline !== undefined, (qb) => qb.where('asset.isOffline', '=', options.isOffline!))
+    .$if(options.isEncoded !== undefined, (qb) =>
+      qb.where((eb) => {
+        const exists = eb.exists((eb) =>
+          eb
+            .selectFrom('asset_file')
+            .whereRef('assetId', '=', 'asset.id')
+            .where('type', '=', AssetFileType.EncodedVideo),
+        );
+        return options.isEncoded ? exists : eb.not(exists);
+      }),
+    )
+    .$if(options.isMotion !== undefined, (qb) =>
+      qb.where('asset.livePhotoVideoId', options.isMotion ? 'is not' : 'is', null),
+    )
+    .$if(!!options.isNotInAlbum && (!options.albumIds || options.albumIds.length === 0), (qb) =>
+      qb.where((eb) => eb.not(eb.exists((eb) => eb.selectFrom('album_asset').whereRef('assetId', '=', 'asset.id')))),
+    )
+    .$if(options.withStacked === false, (qb) => qb.where('asset.stackId', 'is', null))
+    .$if(!!options.withExif, withExifInner)
+    .$if(!!(options.withFaces || options.withPeople), (qb) => qb.select(withFacesAndPeople))
+    .$if(!options.withDeleted, (qb) => qb.where('asset.deletedAt', 'is', null));
+}
+
+export type ReindexVectorIndexOptions = { indexName: string; lists?: number };
+
+type VectorIndexQueryOptions = { table: string; vectorExtension: VectorExtension } & ReindexVectorIndexOptions;
+
+export function vectorIndexQuery({ vectorExtension, table, indexName, lists }: VectorIndexQueryOptions): string {
+  switch (vectorExtension) {
+    case DatabaseExtension.VectorChord: {
+      return `
+        CREATE INDEX IF NOT EXISTS ${indexName} ON ${table} USING vchordrq (embedding vector_cosine_ops) WITH (options = $$
+        residual_quantization = false
+        [build.internal]
+        lists = [${lists ?? 1}]
+        spherical_centroids = true
+        build_threads = 4
+        sampling_factor = 1024
+        $$)`;
+    }
+    case DatabaseExtension.Vector: {
+      return `
+        CREATE INDEX IF NOT EXISTS ${indexName} ON ${table}
+        USING hnsw (embedding vector_cosine_ops)
+        WITH (ef_construction = 300, m = 16)`;
+    }
+    default: {
+      throw new Error(`Unsupported vector extension: '${vectorExtension}'`);
+    }
+  }
+}
 
 export const updateLockedColumns = <T extends Record<string, unknown> & { lockedProperties?: LockableProperty[] }>(
   exif: T,
@@ -174,18 +446,8 @@ export const updateLockedColumns = <T extends Record<string, unknown> & { locked
   return exif;
 };
 
-export const isAssetChecksumConstraint = (error: any) => {
-  return error.code === '23505' && error.constraint === 'asset_checksum_key';
-};
+export const dummy = sql`(select 1)`.as('dummy');
 
-export const tokenizeForSearch = (text: string) => {
-  return text.split(/\s+/).filter(Boolean);
-};
-
+export const asUuid = (id: string | Expression<any>) => sql<string>\`\${id}::uuid\`;
+export const anyUuid = (ids: string[]) => sql<string>\`ANY(\${sql.val(ids)}::uuid[])\`;
 export const dummy = sql\`(select 1)\`.as('dummy');
-
-export const vectorIndexQuery = (eb: ExpressionBuilder<DB, any>, index: string) => {
-  return sql\`1\`;
-};
-
-export const ASSET_CHECKSUM_CONSTRAINT = 'asset_checksum_key';

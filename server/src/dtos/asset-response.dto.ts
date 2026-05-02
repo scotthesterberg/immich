@@ -211,7 +211,7 @@ const mapStack = (entity: { stack?: Stack | null }) => {
   };
 };
 
-export function mapAsset(entity: any, options: AssetMapOptions = {}): AssetResponseDto {
+export function mapAsset(entity: MaybeDehydrated<MapAsset>, options: AssetMapOptions = {}): AssetResponseDto {
   const { stripMetadata = false, withStack = false } = options;
 
   if (stripMetadata) {
@@ -229,7 +229,7 @@ export function mapAsset(entity: any, options: AssetMapOptions = {}): AssetRespo
       width: entity.width,
       height: entity.height,
     };
-    return sanitizedAssetResponse as any;
+    return sanitizedAssetResponse as AssetResponseDto;
   }
 
   const assetDimensions = entity.exifInfo ? getDimensions(entity.exifInfo) : undefined;

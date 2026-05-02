@@ -427,7 +427,7 @@ export class AssetJobRepository {
   @GenerateSql({ params: [], stream: true })
   streamForDetectFacesJob(type: PersonType, force?: boolean) {
     return this.assetsWithPreviews()
-      .$if(force === false, (qb) => qb.where(type === PersonType.Human ? 'job_status.facesRecognizedAt' : (eb as any).ref('job_status.petsRecognizedAt'), 'is', null))
+      .$if(force === false, (qb) => qb.where(type === PersonType.Human ? 'job_status.facesRecognizedAt' : (qb as any).eb.ref('job_status.petsRecognizedAt'), 'is', null))
       .select(['asset.id'])
       .orderBy('asset.fileCreatedAt', 'desc')
       .stream();
