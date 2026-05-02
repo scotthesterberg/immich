@@ -105,7 +105,7 @@ export const AssetFaceWithoutPersonResponseSchema = z
   .describe('Asset face without person')
   .meta({ id: 'AssetFaceWithoutPersonResponseDto' });
 
-export class AssetFaceWithoutPersonResponseDto extends createZodDto(AssetFaceWithoutPersonResponseSchema) {}
+class AssetFaceWithoutPersonResponseDto extends createZodDto(AssetFaceWithoutPersonResponseSchema) {}
 
 export const PersonWithFacesResponseSchema = PersonResponseSchema.extend({
   faces: z.array(AssetFaceWithoutPersonResponseSchema),

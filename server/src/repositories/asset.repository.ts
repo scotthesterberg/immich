@@ -445,6 +445,14 @@ export class AssetRepository {
   }
 
   @GenerateSql({ params: [DummyValue.UUID] })
+  async resetJobStatus(column: keyof AssetJobStatusTable): Promise<void> {
+    await this.db
+      .updateTable('asset_job_status')
+      .set({ [column]: null })
+      .where(column as any, 'is not', null)
+      .execute();
+  }
+
   async deleteAll(ownerId: string): Promise<void> {
     await this.db.deleteFrom('asset').where('ownerId', '=', ownerId).execute();
   }
